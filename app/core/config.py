@@ -13,6 +13,7 @@ class Settings(BaseSettings):
         env_file=".env",
         env_file_encoding="utf-8",
         case_sensitive=True,
+        extra="ignore",  # 追加の環境変数を無視
     )
 
     # Project
@@ -21,7 +22,7 @@ class Settings(BaseSettings):
     API_V1_STR: str = "/api/v1"
     
     # Security
-    SECRET_KEY: str
+    SECRET_KEY: str = "your-secret-key-here-change-in-production"
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 60 * 24 * 8  # 8 days
     ALGORITHM: str = "HS256"
     
@@ -64,18 +65,18 @@ class Settings(BaseSettings):
     REDIS_URL: RedisDsn = "redis://localhost:6379/0"
     
     # Slack
-    SLACK_BOT_TOKEN: str
-    SLACK_SIGNING_SECRET: str
+    SLACK_BOT_TOKEN: str = "xoxb-your-slack-bot-token"
+    SLACK_SIGNING_SECRET: str = "your-slack-signing-secret"
     SLACK_APP_TOKEN: Optional[str] = None
     
     # Google Sheets
-    GOOGLE_SHEETS_ID: str
-    GOOGLE_SERVICE_ACCOUNT_KEY: str  # JSON string or file path
+    GOOGLE_SHEETS_ID: str = "your-google-sheets-id"
+    GOOGLE_SERVICE_ACCOUNT_KEY: str = '{"type": "service_account"}'  # JSON string or file path
     
     # External Systems
-    TECH_WEBHOOK_SECRET: str
-    TECHZIP_WEBHOOK_SECRET: str
-    TECHZIP_API_ENDPOINT: AnyHttpUrl
+    TECH_WEBHOOK_SECRET: str = "your-tech-webhook-secret"
+    TECHZIP_WEBHOOK_SECRET: str = "your-techzip-webhook-secret"
+    TECHZIP_API_ENDPOINT: str = "https://api.techzip.example.com"
     
     # Sentry
     SENTRY_DSN: Optional[str] = None

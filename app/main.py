@@ -6,7 +6,7 @@ from typing import AsyncIterator
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from app.api import health, slack, webhook
+from app.api import health
 from app.api.v1 import api_router
 from app.core.config import settings
 from app.core.logging import setup_logging
@@ -58,16 +58,6 @@ app.add_middleware(
 # Include routers
 app.include_router(health.router, prefix="/health", tags=["health"])
 app.include_router(api_router, prefix=settings.API_V1_STR)
-app.include_router(
-    webhook.router,
-    prefix=f"{settings.API_V1_STR}/webhook",
-    tags=["webhook"],
-)
-app.include_router(
-    slack.router,
-    prefix=f"{settings.API_V1_STR}/slack",
-    tags=["slack"],
-)
 
 
 @app.get("/")

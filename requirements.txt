@@ -14,8 +14,8 @@ celery[redis]==5.3.4
 
 # External APIs
 slack-sdk==3.26.1
-google-api-python-client==2.109.0
-google-auth==2.23.4
+google-api-python-client==2.110.0
+google-auth==2.25.0
 google-auth-oauthlib==1.1.0
 google-auth-httplib2==0.1.1
 
@@ -41,6 +41,7 @@ python-multipart==0.0.6
 prometheus-client==0.19.0
 sentry-sdk[fastapi]==1.38.0
 structlog==23.2.0
+aiosqlite==0.19.0  # SQLite async support for testing
 
 # Testing
 pytest==7.4.3

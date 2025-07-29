@@ -1,0 +1,30 @@
+{
+  "google_sheet": {
+    "sheet_id": "17DKsMGQ6krbhY7GIcX0iaeN-y8HcGGVkXt3d4oOckyQ",
+    "credentials_path": "C:\\Users\\tky99\\dev\\techbookanalytics\\config\\techbook-analytics-aa03914c6639.json"
+  },
+  "paths": {
+    "git_base": "G:\\マイドライブ\\[git]",
+    "output_base": "G:\\.shortcut-targets-by-id\\0B6euJ_grVeOeMnJLU1IyUWgxeWM\\NP-IRD"
+  },
+  "github": {
+    "default_user": "irdtechbook",
+    "token": null,
+    "use_remote": true,
+    "cache_timeout": 86400
+  },
+  "web": {
+    "upload_url": "http://trial.nextpublishing.jp/rapture/",
+    "username": "ep_user",
+    "password": "Nn7eUTX5"
+  },
+  "email": {
+    "default_address": "yamashiro.takashi@gmail.com",
+    "imap_server": "imap.gmail.com",
+    "imap_port": 993,
+    "use_gmail_api": false,
+    "gmail_credentials_path": "config/gmail_oauth_credentials.json",
+    "gmail_address": "yamashiro.takashi@gmail.com",
+    "gmail_app_password": "wmac uatf ykyh yzya"
+  }
+}

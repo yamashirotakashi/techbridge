@@ -10,16 +10,8 @@ from sqlalchemy.orm import Mapped, mapped_column
 from app.core.database import Base
 
 
-class WorkflowStatus(str, Enum):
-    """Workflow status enumeration."""
-    
-    DISCOVERED = "discovered"  # 技術書典で発見
-    PURCHASED = "purchased"  # 購入完了
-    MANUSCRIPT_REQUESTED = "manuscript_requested"  # 原稿依頼
-    MANUSCRIPT_RECEIVED = "manuscript_received"  # 原稿受領
-    FIRST_PROOF = "first_proof"  # 初校
-    SECOND_PROOF = "second_proof"  # 再校
-    COMPLETED = "completed"  # 完成
+# Import WorkflowStatus from enums module
+from app.models.enums import ProgressStatus as WorkflowStatus
 
 
 class WorkflowItem(Base):
@@ -30,6 +22,8 @@ class WorkflowItem(Base):
     id: Mapped[int] = mapped_column(primary_key=True)
     n_number: Mapped[str] = mapped_column(String(20), unique=True, index=True)
     book_id: Mapped[Optional[str]] = mapped_column(String(50), index=True)
+    title: Mapped[Optional[str]] = mapped_column(String(200))
+    author: Mapped[Optional[str]] = mapped_column(String(100))
     repository_name: Mapped[Optional[str]] = mapped_column(String(100))
     slack_channel: Mapped[Optional[str]] = mapped_column(String(50))
     status: Mapped[WorkflowStatus] = mapped_column(
@@ -38,7 +32,7 @@ class WorkflowItem(Base):
         index=True,
     )
     assigned_editor: Mapped[Optional[str]] = mapped_column(String(50))
-    metadata: Mapped[Dict[str, Any]] = mapped_column(JSON, default=dict)
+    workflow_metadata: Mapped[Dict[str, Any]] = mapped_column(JSON, default=dict)
     
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),

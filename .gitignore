@@ -165,3 +165,8 @@ alembic.ini
 .env.production
 config/secrets/
 credentials/
+
+# Sensitive Google credentials and tokens
+config/techbook-analytics-aa03914c6639.json
+config/gmail_oauth_credentials.json  
+config/gmail_token.pickle

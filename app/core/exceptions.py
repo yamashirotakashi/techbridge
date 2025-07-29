@@ -120,3 +120,9 @@ class ConfigurationError(TechBridgeException):
         if config_key:
             error_details["config_key"] = config_key
         super().__init__(f"Configuration error: {message}", error_details, 500)
+
+
+# Aliases for compatibility
+ExternalServiceError = ExternalAPIError
+SlackError = SlackNotificationError
+WebhookError = WorkflowError

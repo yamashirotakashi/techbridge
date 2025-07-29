@@ -15,7 +15,8 @@ from app.schemas.progress import (
     ProgressResponse,
     ProgressListResponse,
     StatusUpdateRequest,
-    StatusUpdateResponse
+    StatusUpdateResponse,
+    WorkflowItemResponse
 )
 from app.crud import workflow as workflow_crud
 from app.services.workflow_manager import WorkflowManager
@@ -52,13 +53,13 @@ async def get_progress(
     n_number = n_number.upper()
     
     # データベースから取得
-    workflow_item = await workflow_crud.get_by_n_number(db, n_number)
+    workflow_item = await workflow_crud.get_workflow_item_by_n_number(db, n_number)
     if not workflow_item:
         raise NotFoundError("WorkflowItem", n_number)
     
     logger.info("Progress retrieved successfully", n_number=n_number, status=workflow_item.status)
     
-    return ProgressResponse.from_workflow_item(workflow_item)
+    return WorkflowItemResponse.model_validate(workflow_item)
 
 
 @router.get("/", response_model=ProgressListResponse)
@@ -93,14 +94,14 @@ async def list_progress(
     # データベースから取得
     workflow_items, total = await workflow_crud.get_multi_with_filters(
         db,
-        status=status,
-        assigned_editor=assigned_editor,
+        skip=offset,
         limit=limit,
-        offset=offset
+        status=status,
+        assigned_editor=assigned_editor
     )
     
     # レスポンス形式に変換
-    items = [ProgressResponse.from_workflow_item(item) for item in workflow_items]
+    items = [WorkflowItemResponse.model_validate(item) for item in workflow_items]
     
     logger.info("Progress list retrieved", count=len(items), total=total)
     
@@ -148,7 +149,7 @@ async def update_status(
     n_number = n_number.upper()
     
     # 既存のワークフローアイテムを取得
-    workflow_item = await workflow_crud.get_by_n_number(db, n_number)
+    workflow_item = await workflow_crud.get_workflow_item_by_n_number(db, n_number)
     if not workflow_item:
         raise NotFoundError("WorkflowItem", n_number)
     
@@ -217,7 +218,7 @@ async def get_status_history(
     n_number = n_number.upper()
     
     # ワークフローアイテムの存在確認
-    workflow_item = await workflow_crud.get_by_n_number(db, n_number)
+    workflow_item = await workflow_crud.get_workflow_item_by_n_number(db, n_number)
     if not workflow_item:
         raise NotFoundError("WorkflowItem", n_number)
     
@@ -259,7 +260,7 @@ async def get_notification_history(
     n_number = n_number.upper()
     
     # ワークフローアイテムの存在確認
-    workflow_item = await workflow_crud.get_by_n_number(db, n_number)
+    workflow_item = await workflow_crud.get_workflow_item_by_n_number(db, n_number)
     if not workflow_item:
         raise NotFoundError("WorkflowItem", n_number)
     
