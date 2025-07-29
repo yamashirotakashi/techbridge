@@ -23,6 +23,10 @@ class Settings(BaseSettings):
     # Security
     SECRET_KEY: str
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 60 * 24 * 8  # 8 days
+    ALGORITHM: str = "HS256"
+    
+    # API Keys (comma-separated)
+    API_KEYS: str = ""
     
     # CORS
     BACKEND_CORS_ORIGINS: List[AnyHttpUrl] = []
@@ -70,6 +74,7 @@ class Settings(BaseSettings):
     
     # External Systems
     TECH_WEBHOOK_SECRET: str
+    TECHZIP_WEBHOOK_SECRET: str
     TECHZIP_API_ENDPOINT: AnyHttpUrl
     
     # Sentry

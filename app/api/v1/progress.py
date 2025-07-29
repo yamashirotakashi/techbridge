@@ -8,6 +8,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 import structlog
 
 from app.core.database import get_db
+from app.core.deps import get_current_user
 from app.core.exceptions import NotFoundError, ValidationError
 from app.models.enums import ProgressStatus
 from app.schemas.progress import (
@@ -115,7 +116,8 @@ async def list_progress(
 async def update_status(
     n_number: str,
     request: StatusUpdateRequest,
-    db: AsyncSession = Depends(get_db)
+    db: AsyncSession = Depends(get_db),
+    current_user: dict = Depends(get_current_user)
 ) -> StatusUpdateResponse:
     """
     指定されたN番号のステータスを更新
@@ -164,7 +166,7 @@ async def update_status(
         updated_item = await workflow_manager.update_status(
             n_number=n_number,
             new_status=request.status,
-            updated_by=request.updated_by or "manual",
+            updated_by=request.updated_by or current_user.get("sub", "unknown"),
             comment=request.comment,
             db=db
         )
