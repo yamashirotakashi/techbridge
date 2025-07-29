@@ -1,1 +1,3 @@
-# TechBridge Application Package
+"""TechBridge - Progress Bridge API"""
+
+__version__ = "0.1.0"
