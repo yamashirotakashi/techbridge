@@ -1,67 +1,67 @@
 # FastAPI Core
-fastapi[all]==0.104.1
-uvicorn[standard]==0.24.0
+fastapi[all]==0.116.1
+uvicorn[standard]==0.35.0
 python-multipart==0.0.6
 
 # Database & ORM
-sqlalchemy[postgresql]==2.0.23
-alembic==1.12.1
-psycopg2-binary==2.9.8
+sqlalchemy[postgresql]==2.0.42
+alembic==1.16.4
+psycopg2-binary==2.9.10
 
 # Redis & Caching
-redis[hiredis]==5.0.1
-celery[redis]==5.3.4
+redis[hiredis]==6.4.0
+celery[redis]==5.5.3
 
 # External APIs
-slack-sdk==3.26.1
-google-api-python-client==2.110.0
-google-auth==2.25.0
-google-auth-oauthlib==1.1.0
+slack-sdk==3.36.0
+google-api-python-client==2.123.0
+google-auth==2.40.3
+google-auth-oauthlib==1.2.2
 google-auth-httplib2==0.1.1
 
 # HTTP & Requests
 httpx==0.25.2
-requests==2.31.0
+requests==2.32.4
 
 # Configuration & Environment
-pydantic[email]==2.5.0
-pydantic-settings==2.0.3
-python-dotenv==1.0.0
+pydantic[email]==2.11.7
+pydantic-settings==2.10.1
+python-dotenv==1.1.1
 
 # Validation & Serialization
-email-validator==2.1.0
-phonenumbers==8.13.26
+email-validator==2.2.0
+phonenumbers==9.0.11
 
 # Security
-python-jose[cryptography]==3.3.0
+python-jose[cryptography]==3.5.0
 passlib[bcrypt]==1.7.4
 python-multipart==0.0.6
 
 # Monitoring & Logging
-prometheus-client==0.19.0
-sentry-sdk[fastapi]==1.38.0
+prometheus-client==0.22.1
+sentry-sdk[fastapi]==2.34.1
 structlog==23.2.0
 aiosqlite==0.19.0  # SQLite async support for testing
 
 # Testing
 pytest==7.4.3
 pytest-asyncio==0.21.1
-pytest-mock==3.12.0
+pytest-mock==3.14.1
 httpx==0.25.2  # for TestClient
-factory-boy==3.3.0
+factory-boy==3.3.3
 
 # Development
 black==23.11.0
 isort==5.12.0
 flake8==6.1.0
-mypy==1.7.1
+mypy==1.17.1
 pre-commit==3.5.0
 
 # Documentation
-mkdocs==1.5.3
-mkdocs-material==9.4.8
+mkdocs==1.6.1
+mkdocs-material==9.6.16
 
 # Utilities
-python-dateutil==2.8.2
-pytz==2023.3
-click==8.1.7
+python-dateutil==2.9.0.post0
+pytz==2025.2
+click==8.2.1
