@@ -1,674 +1,257 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-Google Sheets Service Facade
-=============================
-
-This module provides a unified interface to Google Sheets operations
-using the Facade pattern to coordinate specialized components.
-
-Architecture:
-- Facade Pattern implementation
-- Delegates to 5 specialized modules
-- Maintains backward compatibility
-- Single entry point for all Sheets operations
-
-Components:
-1. sheets_constants - Configuration and constants
-2. sheets_authenticator - Authentication management  
-3. sheets_data_mapper - Data transformation
-4. sheets_operations - API operations
-5. sheets_error_handler - Error handling and retry logic
+Google Sheets Service - Google Sheets連携サービス
 """
 
 import logging
-from typing import List, Dict, Any, Optional, Union
-from pathlib import Path
+from typing import List, Dict, Any, Optional
 from datetime import datetime
-
-# Import specialized modules
-from .sheets_constants import SheetsConstants
-from .sheets_authenticator import GoogleSheetsAuthenticator
-from .sheets_data_mapper import GoogleSheetsDataMapper
-from .sheets_operations import GoogleSheetsOperations
-from .sheets_error_handler import (
-    GoogleSheetsError, 
-    GoogleSheetsErrorHandler,
-    ErrorCategory,
-    ErrorSeverity
-)
-
-# Import DTOs for backward compatibility
-from ..models.publication_workflow import PublicationWorkflowDTO
 
 logger = logging.getLogger(__name__)
 
+class GoogleSheetsError(Exception):
+    """Google Sheetsエラー"""
+    pass
 
 class GoogleSheetsService:
-    """
-    Facade class for Google Sheets operations
+    """Google Sheets連携サービス"""
     
-    This class provides a unified interface to all Google Sheets functionality,
-    delegating to specialized components while maintaining a simple API.
-    
-    Single Responsibility: Coordinating specialized components through Facade pattern
-    """
-    
-    def __init__(self, credentials_path: str, spreadsheet_id: str, 
-                 worksheet_name: str = 'TechWF_Progress_Management'):
+    def __init__(self, config_service=None):
         """
-        Initialize Google Sheets Service Facade
+        初期化
         
         Args:
-            credentials_path: Path to service account JSON file
-            spreadsheet_id: Google Spreadsheet ID
-            worksheet_name: Target worksheet name
+            config_service: 設定サービス
         """
-        try:
-            logger.info("Initializing GoogleSheetsService Facade")
-            
-            # Store configuration
-            self.credentials_path = Path(credentials_path)
-            self.spreadsheet_id = spreadsheet_id
-            self.worksheet_name = worksheet_name
-            
-            # Initialize components
-            self._initialize_components()
-            
-            # Service state
-            self.is_enabled = self._validate_configuration()
-            
-            logger.info(f"GoogleSheetsService initialized - Enabled: {self.is_enabled}")
-            
-        except Exception as e:
-            logger.error(f"Failed to initialize GoogleSheetsService: {e}")
-            self.is_enabled = False
-            # Re-raise as GoogleSheetsError for consistent error handling
-            raise self.error_handler.handle_general_error(
-                e, "Service initialization failed"
-            )
+        self.config_service = config_service
+        self._authenticated = False
+        logger.info("GoogleSheetsService initialized (stub implementation)")
     
-    def _initialize_components(self):
-        """Initialize all specialized components"""
-        # Error handler (initialized first for error handling in other components)
-        self.error_handler = GoogleSheetsErrorHandler(
-            max_retries=SheetsConstants.MAX_RETRIES,
-            initial_delay=SheetsConstants.RETRY_INITIAL_DELAY,
-            max_delay=SheetsConstants.RETRY_MAX_DELAY,
-            backoff_factor=SheetsConstants.RETRY_BACKOFF_FACTOR
-        )
-        
-        # Authenticator
-        self.authenticator = GoogleSheetsAuthenticator(
-            credentials_path=str(self.credentials_path)
-        )
-        
-        # Data mapper
-        self.data_mapper = GoogleSheetsDataMapper()
-        
-        # Operations handler
-        self.operations = GoogleSheetsOperations(
-            authenticator=self.authenticator
-        )
-        
-        logger.debug("All components initialized")
-    
-    def _validate_configuration(self) -> bool:
+    def authenticate(self, credentials_path: str = None) -> bool:
         """
-        Validate service configuration
+        認証処理
+        
+        Args:
+            credentials_path: 認証情報ファイルパス
         
         Returns:
-            True if configuration is valid and service is ready
+            bool: 認証成功フラグ
         """
         try:
-            # Check credentials file exists
-            if not self.credentials_path.exists():
-                logger.warning(f"Credentials file not found: {self.credentials_path}")
-                return False
+            # スタブ実装 - 実際のGoogle API認証は後で実装
+            logger.info("Authenticating with Google Sheets API...")
             
-            # Test authentication
-            if not self.authenticator.test_connection(self.spreadsheet_id):
-                logger.warning("Failed to authenticate with Google Sheets")
-                return False
+            if credentials_path:
+                logger.info(f"Using credentials from: {credentials_path}")
             
-            # Verify worksheet exists or can be created
-            worksheets = self.authenticator.list_worksheets(self.spreadsheet_id)
-            if self.worksheet_name not in worksheets:
-                logger.info(f"Worksheet '{self.worksheet_name}' will be created on first use")
+            # 実際の実装では、google-auth, google-auth-oauthlib, google-auth-httplib2を使用
+            # from google.oauth2.service_account import Credentials
+            # from googleapiclient.discovery import build
             
+            self._authenticated = True
+            logger.info("Google Sheets authentication completed (simulated)")
             return True
             
         except Exception as e:
-            logger.error(f"Configuration validation failed: {e}")
-            return False
+            logger.error(f"Failed to authenticate with Google Sheets: {e}")
+            raise GoogleSheetsError(f"Authentication failed: {e}")
     
-    # ==================== Public API Methods ====================
+    def is_authenticated(self) -> bool:
+        """認証状態を確認"""
+        return self._authenticated
     
-    def get_all_workflows(self) -> List[PublicationWorkflowDTO]:
+    def read_sheet_data(self, sheet_id: str, range_name: str) -> List[List[str]]:
         """
-        Get all workflows from the sheet
-        
-        Returns:
-            List of PublicationWorkflowDTO objects
-            
-        Raises:
-            GoogleSheetsError: On API errors
-        """
-        if not self.is_enabled:
-            logger.warning("Google Sheets service is disabled")
-            return []
-        
-        @self.error_handler.with_retry
-        def _get_all():
-            # Ensure worksheet exists with proper headers
-            self.operations.create_or_update_worksheet(
-                self.spreadsheet_id, 
-                self.worksheet_name
-            )
-            
-            # Get all data as DTOs
-            dtos = self.operations.get_all_data(
-                self.spreadsheet_id,
-                self.worksheet_name
-            )
-            
-            # Convert to PublicationWorkflowDTO objects
-            workflows = []
-            for dto in dtos:
-                try:
-                    workflow = self._dto_to_workflow(dto)
-                    if workflow:
-                        workflows.append(workflow)
-                except Exception as e:
-                    logger.warning(f"Failed to convert DTO: {e}")
-                    continue
-            
-            return workflows
-        
-        try:
-            return _get_all()
-        except GoogleSheetsError:
-            raise
-        except Exception as e:
-            raise self.error_handler.handle_general_error(
-                e, "Failed to get workflows"
-            )
-    
-    def update_workflow(self, workflow: PublicationWorkflowDTO) -> bool:
-        """
-        Update a workflow in the sheet
+        シートからデータを読み込み
         
         Args:
-            workflow: PublicationWorkflowDTO to update
+            sheet_id: スプレッドシートID
+            range_name: 読み込み範囲（例: "Sheet1!A1:E100"）
             
         Returns:
-            True if successful
-            
-        Raises:
-            GoogleSheetsError: On API errors
+            List[List[str]]: セルデータ
         """
-        if not self.is_enabled:
-            logger.warning("Google Sheets service is disabled")
-            return False
-        
-        @self.error_handler.with_retry
-        def _update():
-            # Convert workflow to DTO
-            dto = self._workflow_to_dto(workflow)
-            
-            # Prepare updates
-            updates = {
-                'title': workflow.title,
-                'status': workflow.status,
-                'current_status': workflow.current_status,
-                'editor': workflow.editor,
-                'deadline': workflow.deadline,
-                'page_count': workflow.page_count,
-                'github_url': workflow.github_url,
-                'last_updated': datetime.now()
-            }
-            
-            # Update row by N number
-            return self.operations.update_row_by_key(
-                self.spreadsheet_id,
-                self.worksheet_name,
-                'n_number',
-                workflow.n_number,
-                updates
-            )
+        if not self.is_authenticated():
+            raise GoogleSheetsError("Not authenticated")
         
         try:
-            return _update()
-        except GoogleSheetsError:
-            raise
-        except Exception as e:
-            raise self.error_handler.handle_general_error(
-                e, f"Failed to update workflow {workflow.n_number}"
-            )
-    
-    def batch_update_workflows(self, workflows: List[PublicationWorkflowDTO]) -> int:
-        """
-        Update multiple workflows in batch
-        
-        Args:
-            workflows: List of workflows to update
+            logger.info(f"Reading sheet data: {sheet_id}, range: {range_name}")
             
-        Returns:
-            Number of successfully updated workflows
+            # スタブ実装 - サンプルデータを返す
+            sample_data = [
+                ["N番号", "タイトル", "著者", "ステータス", "更新日"],
+                ["N1234ab", "サンプル技術書1", "著者1", "discovered", "2025-01-15"],
+                ["N5678cd", "サンプル技術書2", "著者2", "purchased", "2025-01-16"],
+                ["N9999ef", "サンプル技術書3", "著者3", "first_proof", "2025-01-17"]
+            ]
             
-        Raises:
-            GoogleSheetsError: On API errors
-        """
-        if not self.is_enabled:
-            logger.warning("Google Sheets service is disabled")
-            return 0
-        
-        success_count = 0
-        for workflow in workflows:
-            try:
-                if self.update_workflow(workflow):
-                    success_count += 1
-            except Exception as e:
-                logger.error(f"Failed to update workflow {workflow.n_number}: {e}")
-                continue
-        
-        logger.info(f"Batch updated {success_count}/{len(workflows)} workflows")
-        return success_count
-    
-    def add_workflow(self, workflow: PublicationWorkflowDTO) -> bool:
-        """
-        Add a new workflow to the sheet
-        
-        Args:
-            workflow: PublicationWorkflowDTO to add
-            
-        Returns:
-            True if successful
-            
-        Raises:
-            GoogleSheetsError: On API errors
-        """
-        if not self.is_enabled:
-            logger.warning("Google Sheets service is disabled")
-            return False
-        
-        @self.error_handler.with_retry
-        def _add():
-            # Convert workflow to DTO
-            dto = self._workflow_to_dto(workflow)
-            
-            # Map to row data
-            row_data = self.data_mapper.map_dto_to_sheet_row(dto)
-            
-            # Append to sheet
-            result = self.operations.append_rows(
-                self.spreadsheet_id,
-                self.worksheet_name,
-                [row_data]
-            )
-            
-            return result is not None
-        
-        try:
-            return _add()
-        except GoogleSheetsError:
-            raise
-        except Exception as e:
-            raise self.error_handler.handle_general_error(
-                e, f"Failed to add workflow {workflow.n_number}"
-            )
-    
-    def find_workflow_by_n_number(self, n_number: str) -> Optional[PublicationWorkflowDTO]:
-        """
-        Find a workflow by N number
-        
-        Args:
-            n_number: N number to search for
-            
-        Returns:
-            PublicationWorkflowDTO if found, None otherwise
-            
-        Raises:
-            GoogleSheetsError: On API errors
-        """
-        if not self.is_enabled:
-            logger.warning("Google Sheets service is disabled")
-            return None
-        
-        @self.error_handler.with_retry
-        def _find():
-            # Find row by N number
-            row_num = self.operations.find_row_by_value(
-                self.spreadsheet_id,
-                self.worksheet_name,
-                SheetsConstants.COLUMN_INDICES['n_number'],
-                n_number
-            )
-            
-            if not row_num:
-                return None
-            
-            # Read the row
-            range_name = f"{self.worksheet_name}!A{row_num}:Z{row_num}"
-            values = self.operations.read_range(self.spreadsheet_id, range_name)
-            
-            if not values:
-                return None
-            
-            # Map to DTO
-            dto = self.data_mapper.map_sheet_row_to_dto(values[0], row_num)
-            
-            # Convert to workflow
-            return self._dto_to_workflow(dto)
-        
-        try:
-            return _find()
-        except GoogleSheetsError:
-            raise
-        except Exception as e:
-            raise self.error_handler.handle_general_error(
-                e, f"Failed to find workflow {n_number}"
-            )
-    
-    def sync_from_sheet(self, existing_workflows: List[PublicationWorkflowDTO]) -> Dict[str, Any]:
-        """
-        Sync workflows from sheet to local database
-        
-        Args:
-            existing_workflows: Current workflows in database
-            
-        Returns:
-            Sync results dictionary with added/updated/unchanged counts
-            
-        Raises:
-            GoogleSheetsError: On API errors
-        """
-        if not self.is_enabled:
-            logger.warning("Google Sheets service is disabled")
-            return {'added': 0, 'updated': 0, 'unchanged': 0, 'errors': []}
-        
-        try:
-            # Get all workflows from sheet
-            sheet_workflows = self.get_all_workflows()
-            
-            # Create lookup for existing workflows
-            existing_map = {w.n_number: w for w in existing_workflows}
-            
-            results = {
-                'added': 0,
-                'updated': 0,
-                'unchanged': 0,
-                'errors': []
-            }
-            
-            # Process each sheet workflow
-            for sheet_workflow in sheet_workflows:
-                try:
-                    if sheet_workflow.n_number not in existing_map:
-                        # New workflow
-                        results['added'] += 1
-                    else:
-                        # Check if updated
-                        existing = existing_map[sheet_workflow.n_number]
-                        if self._workflow_changed(existing, sheet_workflow):
-                            results['updated'] += 1
-                        else:
-                            results['unchanged'] += 1
-                            
-                except Exception as e:
-                    logger.error(f"Error processing workflow {sheet_workflow.n_number}: {e}")
-                    results['errors'].append(str(e))
-            
-            logger.info(f"Sync from sheet complete: {results}")
-            return results
+            logger.info(f"Retrieved {len(sample_data)} rows from sheet")
+            return sample_data
             
         except Exception as e:
-            raise self.error_handler.handle_general_error(
-                e, "Failed to sync from sheet"
-            )
+            logger.error(f"Failed to read sheet data: {e}")
+            raise GoogleSheetsError(f"Failed to read data: {e}")
     
-    def sync_to_sheet(self, workflows: List[PublicationWorkflowDTO]) -> Dict[str, Any]:
+    def write_sheet_data(self, sheet_id: str, range_name: str, values: List[List[str]]) -> bool:
         """
-        Sync workflows from local database to sheet
+        シートにデータを書き込み
         
         Args:
-            workflows: Workflows to sync to sheet
+            sheet_id: スプレッドシートID
+            range_name: 書き込み範囲
+            values: 書き込みデータ
             
         Returns:
-            Sync results dictionary
-            
-        Raises:
-            GoogleSheetsError: On API errors
+            bool: 成功フラグ
         """
-        if not self.is_enabled:
-            logger.warning("Google Sheets service is disabled")
-            return {'added': 0, 'updated': 0, 'errors': []}
+        if not self.is_authenticated():
+            raise GoogleSheetsError("Not authenticated")
         
         try:
-            # Get current sheet workflows
-            sheet_workflows = self.get_all_workflows()
-            sheet_map = {w.n_number: w for w in sheet_workflows}
+            logger.info(f"Writing sheet data: {sheet_id}, range: {range_name}")
+            logger.info(f"Writing {len(values)} rows")
             
-            results = {
-                'added': 0,
-                'updated': 0,
-                'errors': []
-            }
+            # スタブ実装 - 実際の書き込み処理をシミュレート
+            for i, row in enumerate(values):
+                logger.debug(f"Row {i+1}: {row}")
             
-            # Process each local workflow
-            for workflow in workflows:
-                try:
-                    if workflow.n_number not in sheet_map:
-                        # Add new workflow
-                        if self.add_workflow(workflow):
-                            results['added'] += 1
-                    else:
-                        # Update existing workflow
-                        if self.update_workflow(workflow):
-                            results['updated'] += 1
-                            
-                except Exception as e:
-                    logger.error(f"Error syncing workflow {workflow.n_number}: {e}")
-                    results['errors'].append(str(e))
-            
-            logger.info(f"Sync to sheet complete: {results}")
-            return results
-            
-        except Exception as e:
-            raise self.error_handler.handle_general_error(
-                e, "Failed to sync to sheet"
-            )
-    
-    # ==================== Utility Methods ====================
-    
-    def validate_connection(self) -> bool:
-        """
-        Validate connection to Google Sheets
-        
-        Checks if the service is enabled and tests the connection to Google Sheets.
-        Handles exceptions gracefully and returns False if any issues occur.
-        
-        Returns:
-            True if service is enabled and connection is successful, False otherwise
-        """
-        try:
-            # Check if service is enabled
-            if not self.is_enabled:
-                logger.warning("Google Sheets service is disabled")
-                return False
-            
-            # Test the connection to Google Sheets
-            if not self.authenticator.test_connection(self.spreadsheet_id):
-                logger.error("Failed to connect to Google Sheets")
-                return False
-            
-            logger.debug("Google Sheets connection validated successfully")
+            logger.info("Sheet data write completed (simulated)")
             return True
             
         except Exception as e:
-            logger.error(f"Connection validation failed: {e}")
-            return False
+            logger.error(f"Failed to write sheet data: {e}")
+            raise GoogleSheetsError(f"Failed to write data: {e}")
     
-    def test_connection(self) -> bool:
+    def append_sheet_data(self, sheet_id: str, range_name: str, values: List[List[str]]) -> bool:
         """
-        Test connection to Google Sheets
+        シートにデータを追記
         
-        Returns:
-            True if connection successful
-        """
-        try:
-            if not self.is_enabled:
-                return False
+        Args:
+            sheet_id: スプレッドシートID
+            range_name: 追記範囲
+            values: 追記データ
             
-            return self.authenticator.test_connection(self.spreadsheet_id)
+        Returns:
+            bool: 成功フラグ
+        """
+        if not self.is_authenticated():
+            raise GoogleSheetsError("Not authenticated")
+        
+        try:
+            logger.info(f"Appending sheet data: {sheet_id}, range: {range_name}")
+            logger.info(f"Appending {len(values)} rows")
+            
+            # スタブ実装 - 追記処理をシミュレート
+            for i, row in enumerate(values):
+                logger.debug(f"Appending row {i+1}: {row}")
+            
+            logger.info("Sheet data append completed (simulated)")
+            return True
             
         except Exception as e:
-            logger.error(f"Connection test failed: {e}")
-            return False
+            logger.error(f"Failed to append sheet data: {e}")
+            raise GoogleSheetsError(f"Failed to append data: {e}")
     
-    def get_worksheet_url(self) -> Optional[str]:
+    def update_single_cell(self, sheet_id: str, cell_range: str, value: str) -> bool:
         """
-        Get URL to the worksheet
-        
-        Returns:
-            URL string or None if service disabled
-        """
-        if not self.is_enabled:
-            return None
-        
-        # Get worksheet GID
-        try:
-            worksheets = self.authenticator.list_worksheets(self.spreadsheet_id)
-            if self.worksheet_name in worksheets:
-                # Construct URL
-                return f"https://docs.google.com/spreadsheets/d/{self.spreadsheet_id}/edit"
-        except:
-            pass
-        
-        return f"https://docs.google.com/spreadsheets/d/{self.spreadsheet_id}"
-    
-    def get_error_recovery_suggestion(self, error: GoogleSheetsError) -> str:
-        """
-        Get recovery suggestion for an error
+        単一セルを更新
         
         Args:
-            error: GoogleSheetsError instance
+            sheet_id: スプレッドシートID
+            cell_range: セル範囲（例: "Sheet1!A1"）
+            value: 更新値
             
         Returns:
-            Recovery suggestion string
+            bool: 成功フラグ
         """
-        return self.error_handler.get_recovery_suggestion(error)
-    
-    # ==================== Private Helper Methods ====================
-    
-    def _dto_to_workflow(self, dto: Dict[str, Any]) -> Optional[PublicationWorkflowDTO]:
-        """
-        Convert internal DTO to PublicationWorkflowDTO
+        if not self.is_authenticated():
+            raise GoogleSheetsError("Not authenticated")
         
-        Args:
-            dto: Internal DTO dictionary
-            
-        Returns:
-            PublicationWorkflowDTO or None if invalid
-        """
         try:
-            if not dto.get('is_valid', False):
-                return None
+            logger.info(f"Updating cell: {sheet_id}, {cell_range} = {value}")
             
-            # Create workflow DTO
-            workflow = PublicationWorkflowDTO(
-                n_number=dto.get('n_number', ''),
-                title=dto.get('title', ''),
-                status=dto.get('status', 'Unknown'),
-                current_status=dto.get('current_status', 'Unknown'),
-                repository_url=dto.get('github_url', ''),
-                slack_channel=dto.get('slack_channel', ''),
-                author_name=dto.get('author_name', ''),
-                editor=dto.get('editor', ''),
-                page_count=dto.get('page_count', 0),
-                deadline=dto.get('deadline'),
-                memo=dto.get('memo', ''),
-                last_updated=dto.get('last_updated', datetime.now())
-            )
-            
-            # Set additional fields
-            workflow.editor = dto.get('editor', '')
-            workflow.github_url = dto.get('github_url', '')
-            
-            return workflow
+            # スタブ実装 - セル更新をシミュレート
+            logger.info("Cell update completed (simulated)")
+            return True
             
         except Exception as e:
-            logger.error(f"Failed to convert DTO to workflow: {e}")
+            logger.error(f"Failed to update cell: {e}")
+            raise GoogleSheetsError(f"Failed to update cell: {e}")
+    
+    def find_row_by_n_number(self, sheet_id: str, n_number: str, range_name: str = "Sheet1!A:Z") -> Optional[int]:
+        """
+        N番号で行を検索
+        
+        Args:
+            sheet_id: スプレッドシートID
+            n_number: N番号
+            range_name: 検索範囲
+            
+        Returns:
+            Optional[int]: 該当行番号（1-based、見つからない場合はNone）
+        """
+        try:
+            data = self.read_sheet_data(sheet_id, range_name)
+            
+            for i, row in enumerate(data):
+                if len(row) > 0 and row[0] == n_number:
+                    return i + 1  # 1-based index
+            
+            logger.info(f"N番号 '{n_number}' が見つかりませんでした")
+            return None
+            
+        except Exception as e:
+            logger.error(f"Failed to find row by N番号: {e}")
             return None
     
-    def _workflow_to_dto(self, workflow: PublicationWorkflowDTO) -> Dict[str, Any]:
+    def get_sheet_info(self, sheet_id: str) -> Dict[str, Any]:
         """
-        Convert PublicationWorkflowDTO to internal DTO
+        シート情報を取得
         
         Args:
-            workflow: PublicationWorkflowDTO
+            sheet_id: スプレッドシートID
             
         Returns:
-            Internal DTO dictionary
+            Dict[str, Any]: シート情報
         """
-        return {
-            'n_number': workflow.n_number,
-            'title': workflow.title,
-            'status': workflow.status,
-            'current_status': workflow.current_status,
-            'github_url': workflow.repository_url or workflow.github_url,
-            'slack_channel': workflow.slack_channel,
-            'author_name': workflow.author_name,
-            'editor': workflow.editor or workflow.editor,
-            'page_count': workflow.page_count,
-            'deadline': workflow.deadline,
-            'memo': workflow.memo,
-            'last_updated': workflow.last_updated or datetime.now(),
-            'is_valid': True
-        }
-    
-    def _workflow_changed(self, existing: PublicationWorkflowDTO, 
-                         new: PublicationWorkflowDTO) -> bool:
-        """
-        Check if workflow has changed
+        if not self.is_authenticated():
+            raise GoogleSheetsError("Not authenticated")
         
-        Args:
-            existing: Existing workflow
-            new: New workflow
+        try:
+            logger.info(f"Getting sheet info: {sheet_id}")
             
-        Returns:
-            True if changed
-        """
-        # Compare key fields
-        fields_to_check = [
-            'title', 'status', 'current_status', 'repository_url',
-            'slack_channel', 'author_name', 'editor', 'page_count',
-            'deadline', 'memo'
-        ]
+            # スタブ実装 - サンプル情報を返す
+            sheet_info = {
+                "spreadsheet_id": sheet_id,
+                "title": "TechWF Workflow Sheet",
+                "sheets": [
+                    {
+                        "title": "Main",
+                        "sheet_id": 0,
+                        "row_count": 100,
+                        "column_count": 10
+                    }
+                ],
+                "last_updated": datetime.now().isoformat()
+            }
+            
+            logger.info("Sheet info retrieved (simulated)")
+            return sheet_info
+            
+        except Exception as e:
+            logger.error(f"Failed to get sheet info: {e}")
+            raise GoogleSheetsError(f"Failed to get sheet info: {e}")
+
+# ファクトリー関数
+def create_google_sheets_service(config_service=None) -> GoogleSheetsService:
+    """
+    Google Sheetsサービスを作成
+    
+    Args:
+        config_service: 設定サービス
         
-        for field in fields_to_check:
-            if getattr(existing, field, None) != getattr(new, field, None):
-                return True
-        
-        return False
-    
-    # ==================== Context Manager Support ====================
-    
-    def __enter__(self):
-        """Context manager entry"""
-        return self
-    
-    def __exit__(self, exc_type, exc_val, exc_tb):
-        """Context manager exit"""
-        # Clean up resources if needed
-        pass
-
-
-# ==================== Module Exports ====================
-
-__all__ = [
-    'GoogleSheetsService',
-    'GoogleSheetsError',
-    'ErrorCategory',
-    'ErrorSeverity'
-]
+    Returns:
+        GoogleSheetsService: サービスインスタンス
+    """
+    return GoogleSheetsService(config_service)

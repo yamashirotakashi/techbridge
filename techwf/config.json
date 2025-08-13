@@ -1,0 +1,14 @@
+{
+  "sheets_enabled": false,
+  "sheets_id": "",
+  "sheets_credentials_path": "",
+  "slack_enabled": false,
+  "slack_bot_token": "",
+  "slack_signing_secret": "",
+  "db_path": "data/techwf.db",
+  "theme": "default",
+  "auto_refresh": true,
+  "refresh_interval": 30,
+  "file_watch_enabled": true,
+  "watch_directory": "data/import"
+}
