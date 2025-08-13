@@ -152,14 +152,24 @@ class NNumberIntegrationRepository:
                     stage_type.value
                 ))
                 
-                # 完了時は現在ステージも更新
+                # 完了時は現在ステージも更新（次のステージか現在のステージまで）
                 if stage_status == 'completed':
+                    # ステージ順序確認
+                    next_stage = None
+                    if stage_type == WorkflowStageType.PROPOSAL_DRAFT:
+                        next_stage = WorkflowStageType.PROPOSAL
+                    elif stage_type == WorkflowStageType.PROPOSAL:
+                        next_stage = WorkflowStageType.SPECIFICATION
+                    
+                    # 次のステージがある場合は次に、なければ現在のステージを設定
+                    update_stage = next_stage.value if next_stage else stage_type.value
+                    
                     conn.execute("""
                         UPDATE n_number_master 
                         SET current_stage = ?, updated_at = ?
                         WHERE n_number = ?
                     """, (
-                        stage_type.value,
+                        update_stage,
                         datetime.now().isoformat(),
                         n_number
                     ))
