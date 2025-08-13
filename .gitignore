@@ -170,3 +170,5 @@ credentials/
 config/techbook-analytics-aa03914c6639.json
 config/gmail_oauth_credentials.json  
 config/gmail_token.pickle
+config/credentials.json
+app/mini_apps/project_initializer/config/service_account.json
