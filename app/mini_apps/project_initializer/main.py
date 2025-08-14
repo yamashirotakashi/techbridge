@@ -1,663 +1,868 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-PJINIT - Project Initializer
-プロジェクト初期化ツール メインエントリーポイント
+PJINIT - 技術の泉シリーズプロジェクト初期化ツール
+Ver1.2同等機能復元版
 """
 
 import sys
 import os
+import asyncio
 from pathlib import Path
-import json
-import logging
+from typing import Optional, Dict, Any
 from datetime import datetime
-from typing import Dict, Any, Optional
-from dataclasses import dataclass
+import platform
+
+# WSL環境検出（より正確な判定）
+def detect_wsl_environment():
+    """WSL環境を正確に検出"""
+    try:
+        # /proc/version の存在とマイクロソフト文字列の存在をチェック
+        if Path('/proc/version').exists():
+            with open('/proc/version', 'r') as f:
+                version_info = f.read().lower()
+                return 'microsoft' in version_info or 'wsl' in version_info
+        return False
+    except:
+        # Windowsネイティブ環境では /proc/version が存在しない
+        return False
+
+is_wsl = detect_wsl_environment()
 
 # PyQt6インポート
 try:
     from PyQt6.QtWidgets import (
         QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
-        QLabel, QLineEdit, QPushButton, QComboBox, QTextEdit, QGroupBox,
-        QCheckBox, QFileDialog, QMessageBox, QProgressBar, QTabWidget
+        QLabel, QLineEdit, QPushButton, QTextEdit, QGroupBox, QGridLayout,
+        QCheckBox, QComboBox, QTableWidget, QTableWidgetItem, QHeaderView,
+        QMessageBox, QTabWidget, QSplitter, QProgressBar
     )
     from PyQt6.QtCore import Qt, QThread, pyqtSignal, QTimer
-    from PyQt6.QtGui import QFont, QIcon
-except ImportError as e:
-    print(f"PyQt6 import error: {e}")
-    print("Please install PyQt6: pip install PyQt6")
-    sys.exit(1)
-
-# ログ設定
-logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
-    handlers=[
-        logging.FileHandler('logs/pjinit.log', encoding='utf-8'),
-        logging.StreamHandler()
-    ]
-)
-logger = logging.getLogger(__name__)
+    from PyQt6.QtGui import QFont, QIcon, QAction
+    pyqt6_available = True
+except ImportError:
+    pyqt6_available = False
 
 
-@dataclass
-class ProjectConfig:
-    """プロジェクト設定"""
-    name: str
-    path: str
-    project_type: str
-    template: str
-    description: str = ""
-    author: str = ""
-    license: str = "MIT"
-    git_init: bool = True
-    virtual_env: bool = True
+def safe_print(text: str):
+    """Unicode文字を安全に出力 - Windows CP932対応強化"""
+    try:
+        # Windows環境でCP932エンコーディング問題に対応
+        if sys.platform.startswith('win'):
+            # Unicode絵文字を安全な文字に置換
+            safe_text = (text.replace("✅", "[OK]")
+                            .replace("✗", "[ERROR]")
+                            .replace("⚠️", "[WARN]")
+                            .replace("🔧", "[CONFIG]")
+                            .replace("📊", "[DATA]"))
+            try:
+                print(safe_text.encode('cp932', 'ignore').decode('cp932'))
+            except (UnicodeEncodeError, UnicodeDecodeError):
+                print(safe_text.encode('ascii', 'ignore').decode('ascii'))
+        else:
+            print(text)
+    except Exception:
+        # 最後の手段: ASCII文字のみで出力
+        ascii_text = text.encode('ascii', 'ignore').decode('ascii')
+        print(ascii_text)
+
+
+# Qt6 + asyncio統合ライブラリ
+if pyqt6_available:
+    try:
+        from asyncqt import QEventLoop
+        safe_print("✅ asyncqt使用")
+    except ImportError:
+        try:
+            import qasync
+            from qasync import QEventLoop
+            safe_print("✅ qasync使用（Qt6対応）")
+        except ImportError:
+            safe_print("⚠️ asyncio統合ライブラリなし - 同期処理のみ")
+            QEventLoop = None
+
+
+# 自作モジュール（conditional import）
+google_sheets_available = False
+slack_client_available = False
+github_client_available = False
+
+try:
+    from google_sheets import GoogleSheetsClient
+    google_sheets_available = True
+except ImportError:
+    safe_print("⚠️ Google Sheets クライアントが見つかりません")
+
+try:
+    from slack_client import SlackClient
+    slack_client_available = True
+except ImportError:
+    safe_print("⚠️ Slack クライアントが見つかりません")
+
+try:
+    from github_client import GitHubClient
+    github_client_available = True
+except ImportError:
+    safe_print("⚠️ GitHub クライアントが見つかりません")
+
+try:
+    from path_resolver import get_config_path
+except ImportError:
+    def get_config_path(filename):
+        return f"config/{filename}"
+
+
+class WorkerThread(QThread):
+    """非同期処理用のワーカースレッド"""
     
-    def to_dict(self) -> Dict[str, Any]:
-        return {
-            'name': self.name,
-            'path': self.path,
-            'project_type': self.project_type,
-            'template': self.template,
-            'description': self.description,
-            'author': self.author,
-            'license': self.license,
-            'git_init': self.git_init,
-            'virtual_env': self.virtual_env
-        }
-
-
-class ProjectInitializerWorker(QThread):
-    """プロジェクト初期化ワーカースレッド"""
+    progress = pyqtSignal(str)
+    finished = pyqtSignal(dict)
+    error = pyqtSignal(str)
     
-    progress_updated = pyqtSignal(int, str)
-    finished = pyqtSignal(bool, str)
-    
-    def __init__(self, config: ProjectConfig):
+    def __init__(self, task_type: str, params: Dict[str, Any]):
         super().__init__()
-        self.config = config
+        self.task_type = task_type
+        self.params = params
     
     def run(self):
-        """プロジェクト初期化実行"""
+        """タスクを実行"""
         try:
-            self.progress_updated.emit(10, "プロジェクトディレクトリ作成中...")
-            self.create_project_structure()
+            loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(loop)
             
-            self.progress_updated.emit(30, "設定ファイル作成中...")
-            self.create_config_files()
-            
-            self.progress_updated.emit(50, "テンプレートファイル作成中...")
-            self.create_template_files()
-            
-            if self.config.git_init:
-                self.progress_updated.emit(70, "Gitリポジトリ初期化中...")
-                self.initialize_git()
-            
-            if self.config.virtual_env:
-                self.progress_updated.emit(85, "仮想環境作成中...")
-                self.create_virtual_env()
-            
-            self.progress_updated.emit(100, "完了!")
-            self.finished.emit(True, "プロジェクト初期化が完了しました")
+            if self.task_type == "initialize_project":
+                result = loop.run_until_complete(self._initialize_project())
+            elif self.task_type == "check_project":
+                result = loop.run_until_complete(self._check_project_info())
+            else:
+                raise ValueError(f"Unknown task type: {self.task_type}")
+                
+            self.finished.emit(result)
             
         except Exception as e:
-            logger.error(f"プロジェクト初期化エラー: {e}")
-            self.finished.emit(False, f"エラー: {str(e)}")
+            self.error.emit(str(e))
+        finally:
+            loop.close()
     
-    def create_project_structure(self):
-        """プロジェクト構造作成"""
-        project_path = Path(self.config.path) / self.config.name
-        project_path.mkdir(parents=True, exist_ok=True)
+    async def _check_project_info(self):
+        """プロジェクト情報を確認"""
+        self.progress.emit("Google Sheetsから情報を取得中...")
         
-        # 基本ディレクトリ構造
-        directories = ['src', 'tests', 'docs', 'config', 'data', 'scripts']
-        for dir_name in directories:
-            (project_path / dir_name).mkdir(exist_ok=True)
+        if not google_sheets_available:
+            raise ValueError("Google Sheets連携が利用できません")
+        
+        # Google Sheets クライアント初期化
+        service_account_path = get_config_path("service_account.json")
+        sheets_client = GoogleSheetsClient(str(service_account_path))
+        
+        # プロジェクト情報取得
+        project_info = await sheets_client.get_project_info(
+            self.params["planning_sheet_id"],
+            self.params["n_code"]
+        )
+        
+        if not project_info:
+            raise ValueError(f"Nコード {self.params['n_code']} が見つかりません")
+        
+        # 購入リストから書籍URL取得
+        self.progress.emit("購入リストから書籍URLを検索中...")
+        book_url = await sheets_client.get_book_url_from_purchase_list(
+            self.params["purchase_sheet_id"],
+            self.params["n_code"]
+        )
+        
+        project_info["book_url_from_purchase"] = book_url
+        
+        return project_info
     
-    def create_config_files(self):
-        """設定ファイル作成"""
-        project_path = Path(self.config.path) / self.config.name
+    async def _initialize_project(self):
+        """プロジェクト初期化を実行"""
+        result = {
+            "slack_channel": None,
+            "github_repo": None,
+            "manual_tasks": []
+        }
         
-        # README.md
-        readme_content = f"""# {self.config.name}
-
-{self.config.description}
-
-## 概要
-プロジェクト種別: {self.config.project_type}
-テンプレート: {self.config.template}
-
-## セットアップ
-```bash
-# 依存関係インストール
-pip install -r requirements.txt
-
-# アプリケーション実行
-python src/main.py
-```
-
-## 作成者
-{self.config.author}
-
-## ライセンス
-{self.config.license}
-"""
-        (project_path / "README.md").write_text(readme_content, encoding='utf-8')
+        # 1. プロジェクト情報取得
+        project_info = await self._check_project_info()
+        result["project_info"] = project_info
         
-        # requirements.txt
-        requirements = self.get_template_requirements()
-        (project_path / "requirements.txt").write_text(requirements, encoding='utf-8')
+        # 2. Slackチャンネル作成
+        if self.params.get("create_slack_channel") and slack_client_available:
+            self.progress.emit("Slackチャンネルを作成中...")
+            
+            slack_client = SlackClient(
+                self.params["slack_token"],
+                self.params.get("slack_user_token", os.getenv("SLACK_USER_TOKEN"))
+            )
+            # チャンネル名はリポジトリ名と同じにする
+            channel_name = project_info["repository_name"]
+            book_title = project_info.get("book_title")
+            
+            # チャンネル作成（書籍名をトピックに設定）
+            channel_id = await slack_client.create_channel(channel_name, book_title)
+            if channel_id:
+                result["slack_channel"] = {
+                    "id": channel_id,
+                    "name": channel_name
+                }
+                
+                # チャンネル作成後の安定化待機（時間を延長）
+                await asyncio.sleep(3.0)
+                
+                # デフォルトメンバー招待（User Token使用）
+                self.progress.emit("山城敬を招待中...")
+                invite_success = await slack_client.invite_user_to_channel(
+                    channel_id,
+                    "U7V83BLLB",  # 山城敬
+                    use_user_token=True  # プライベートチャンネルのためUser Token使用
+                )
+                if not invite_success:
+                    self.progress.emit("[WARN] 山城敬の招待に失敗しました")
+                
+                # Bot招待（User Token使用）
+                self.progress.emit("TechZip PDF Botを招待中...")
+                bot_invite_success = await slack_client.invite_user_to_channel(
+                    channel_id,
+                    slack_client.TECHZIP_PDF_BOT_ID,
+                    use_user_token=True  # プライベートチャンネルのためUser Token使用
+                )
+                if not bot_invite_success:
+                    self.progress.emit("[WARN] TechZip PDF Botの招待に失敗しました")
+                
+                # GitHub App招待（複数の方法を試行）
+                self.progress.emit("GitHub Appを招待中... (Bot Token優先)")
+                github_app_invite_success = False
+                
+                # 方法1: Bot Token（現在のTechZip Bot）での招待を試行（ChatGPT推奨方式）
+                try:
+                    github_app_invite_success = await slack_client.invite_github_app_with_bot_token(
+                        channel_id
+                    )
+                    if github_app_invite_success:
+                        self.progress.emit("✅ GitHub App招待完了 (Bot Token)")
+                except Exception as e:
+                    self.progress.emit(f"Bot Token招待失敗: {str(e)[:50]}...")
+                
+                # 方法2: Bot Token失敗時、User Tokenでの招待を試行
+                if not github_app_invite_success:
+                    self.progress.emit("User Token招待を試行中...")
+                    try:
+                        github_app_invite_success = await slack_client.invite_user_to_channel(
+                            channel_id,
+                            slack_client.GITHUB_APP_ID,
+                            use_user_token=True
+                        )
+                        if github_app_invite_success:
+                            self.progress.emit("✅ GitHub App招待完了 (User Token)")
+                    except Exception as e:
+                        self.progress.emit(f"User Token招待失敗: {str(e)[:50]}...")
+                
+                # 方法3: 両方失敗時、別Botでの招待を試行
+                if not github_app_invite_success:
+                    self.progress.emit("代替Bot招待を試行中...")
+                    try:
+                        github_app_invite_success = await slack_client.invite_github_app_with_alternative_bot(
+                            channel_id
+                        )
+                        if github_app_invite_success:
+                            self.progress.emit("✅ GitHub App招待完了 (代替Bot)")
+                        else:
+                            self.progress.emit("[WARN] 全ての招待方法が失敗")
+                    except Exception as e:
+                        self.progress.emit(f"代替Bot招待エラー: {str(e)[:30]}...")
+                
+                # 最終結果とGitHub App手動タスクの追加
+                if not github_app_invite_success:
+                    self.progress.emit("[WARN] GitHub App招待失敗 - 手動設定が必要です")
+                    # 手動タスクに追加
+                    result["manual_tasks"].append({
+                        "type": "github_app_invitation",
+                        "repository_name": project_info["repository_name"],
+                        "channel_name": channel_name,
+                        "description": f"GitHub Appを#{channel_name}に設定してください"
+                    })
+                
+                # 著者の招待処理（エラーハンドリング付き）
+                if project_info.get("slack_user_id"):
+                    # 既存ユーザー
+                    self.progress.emit("著者を招待中...")
+                    author_invite_success = await slack_client.invite_user_to_channel(
+                        channel_id,
+                        project_info["slack_user_id"],
+                        use_user_token=True  # プライベートチャンネルのためUser Token使用
+                    )
+                    if not author_invite_success:
+                        self.progress.emit("[WARN] 著者の招待に失敗しました")
+                        # 手動タスクとして記録
+                        result["manual_tasks"].append({
+                            "type": "slack_invitation",
+                            "user_id": project_info["slack_user_id"],
+                            "email": project_info.get("author_email", "不明"),
+                            "description": f"著者 {project_info.get('author_email', project_info['slack_user_id'])} をSlackチャンネルに招待してください"
+                        })
+                elif project_info.get("author_email"):
+                    # メールで検索
+                    self.progress.emit("著者をメールで検索中...")
+                    user_id = await slack_client.find_user_by_email(
+                        project_info["author_email"]
+                    )
+                    if user_id:
+                        self.progress.emit("著者を招待中...")
+                        author_invite_success = await slack_client.invite_user_to_channel(
+                            channel_id, 
+                            user_id,
+                            use_user_token=True  # プライベートチャンネルのためUser Token使用
+                        )
+                        if not author_invite_success:
+                            self.progress.emit("[WARN] 著者の招待に失敗しました")
+                            # 手動タスクとして記録
+                            result["manual_tasks"].append({
+                                "type": "slack_invitation",
+                                "user_id": user_id,
+                                "email": project_info["author_email"],
+                                "description": f"著者 {project_info['author_email']} をSlackチャンネルに招待してください"
+                            })
+                    else:
+                        # 手動タスク作成
+                        self.progress.emit("著者が見つからないため手動タスクを作成...")
+                        result["manual_tasks"].append({
+                            "type": "slack_invitation",
+                            "email": project_info["author_email"],
+                            "description": f"著者 {project_info['author_email']} をSlackワークスペースに招待してください"
+                        })
         
-        # .gitignore
-        gitignore_content = """__pycache__/
-*.py[cod]
-*$py.class
-*.so
-.Python
-env/
-venv/
-ENV/
-.venv/
-.env
-.DS_Store
-*.log
-*.db
-*.sqlite3
-.idea/
-.vscode/
-"""
-        (project_path / ".gitignore").write_text(gitignore_content)
-    
-    def create_template_files(self):
-        """テンプレート固有ファイル作成"""
-        project_path = Path(self.config.path) / self.config.name
+        # 3. GitHubリポジトリ作成
+        if self.params.get("create_github_repo") and github_client_available:
+            self.progress.emit("GitHubリポジトリを作成中...")
+            self.progress.emit("yamashirotakashi（編集者）とコラボレーター設定も実行...")
+            
+            github_client = GitHubClient(self.params["github_token"])
+            
+            # 書籍名をdescriptionに設定（書籍名がある場合は書籍名のみ）
+            book_title = project_info.get("book_title")
+            if book_title and book_title != "技術の泉シリーズ":
+                description = book_title  # 書籍名のみ
+            else:
+                description = f"{self.params['n_code']} - 技術の泉シリーズ"
+            
+            repo_info = await github_client.setup_repository(
+                n_code=self.params["n_code"],
+                repo_name=project_info["repository_name"],
+                github_username=project_info.get("github_account"),
+                description=description,
+                book_title=book_title
+            )
+            
+            if repo_info:
+                result["github_repo"] = repo_info
+                
+                # GitHubリポジトリ招待失敗の場合は手動タスクに追加
+                if repo_info.get("invitation_failed"):
+                    result["manual_tasks"].append({
+                        "type": "github_invitation",
+                        "github_username": repo_info.get("failed_github_username", "不明"),
+                        "repository_url": repo_info.get("html_url", "不明"),
+                        "description": f"GitHub {repo_info.get('failed_github_username', '不明')} をリポジトリに招待してください"
+                    })
         
-        if self.config.template == "python_app":
-            # main.py
-            main_content = f'''#!/usr/bin/env python3
-# -*- coding: utf-8 -*-
-"""
-{self.config.name} - メインアプリケーション
-"""
-
-def main():
-    print("Hello, {self.config.name}!")
-
-if __name__ == "__main__":
-    main()
-'''
-            (project_path / "src" / "main.py").write_text(main_content, encoding='utf-8')
+        # 4. Google Sheets更新
+        if self.params.get("update_sheets") and google_sheets_available:
+            self.progress.emit("Google Sheetsを更新中...")
+            
+            # 書籍URLの転記
+            if project_info.get("book_url_from_purchase"):
+                service_account_path = get_config_path("service_account.json")
+                sheets_client = GoogleSheetsClient(str(service_account_path))
+                await sheets_client.update_book_url(
+                    self.params["planning_sheet_id"],
+                    self.params["n_code"],
+                    project_info["book_url_from_purchase"]
+                )
         
-        elif self.config.template == "web_app":
-            # Flask/FastAPI テンプレート
-            app_content = f'''#!/usr/bin/env python3
-# -*- coding: utf-8 -*-
-"""
-{self.config.name} - Webアプリケーション
-"""
+        # 5. ワークフロー管理統合（全実行結果を投稿）
+        if slack_client_available:
+            self.progress.emit("ワークフロー管理システムを統合中...")
+            
+            slack_client = SlackClient(
+                self.params["slack_token"],
+                self.params.get("slack_user_token", os.getenv("SLACK_USER_TOKEN"))
+            )
+            
+            # ワークフロー管理チャンネルを検索（常に管理チャンネルIDが返される）
+            workflow_channel_id = await slack_client.find_workflow_channel()
+            
+            # ワークフローガイダンスを投稿（全ての実行結果）
+            await slack_client.post_workflow_guidance(
+                workflow_channel_id,
+                project_info,
+                result.get("manual_tasks", []),
+                execution_summary=result,  # 全実行結果を含める
+                sheet_id=self.params["planning_sheet_id"]  # 発行計画シートID
+            )
+            
+            # 手動タスク管理シートに記録を追加
+            if self.params.get("update_sheets") and google_sheets_available:
+                service_account_path = get_config_path("service_account.json")
+                sheets_client = GoogleSheetsClient(str(service_account_path))
+                
+                status = "手動タスクあり" if result.get("manual_tasks") else "初期化完了"
+                additional_info = {
+                    "slack_channel": result.get("slack_channel", {}).get("name", "未作成"),
+                    "github_repo": result.get("github_repo", {}).get("html_url", "未作成"),
+                    "manual_tasks_count": len(result.get("manual_tasks", []))
+                }
+                
+                # 手動タスク管理シートに記録を追加
+                try:
+                    await sheets_client.add_manual_task_record(
+                        self.params["planning_sheet_id"],
+                        self.params["n_code"],
+                        status,
+                        additional_info
+                    )
+                    self.progress.emit("手動タスク管理シートに記録を追加しました")
+                    result["workflow_posted"] = True
+                except Exception as e:
+                    self.progress.emit(f"[WARN] 手動タスク管理シート更新に失敗: {str(e)}")
+                    result["workflow_posted"] = False
+            else:
+                # Google Sheets更新が無効でも管理チャンネルには投稿済み
+                result["workflow_posted"] = True
+        
+        self.progress.emit("完了！")
+        return result
 
-from flask import Flask, render_template
 
-app = Flask(__name__)
-
-@app.route('/')
-def index():
-    return render_template('index.html', title='{self.config.name}')
-
-if __name__ == "__main__":
-    app.run(debug=True)
-'''
-            (project_path / "src" / "app.py").write_text(app_content, encoding='utf-8')
-    
-    def get_template_requirements(self) -> str:
-        """テンプレート別requirements.txt"""
-        if self.config.template == "python_app":
-            return "requests>=2.28.0\npytest>=7.0.0\n"
-        elif self.config.template == "web_app":
-            return "Flask>=2.3.0\nrequests>=2.28.0\npytest>=7.0.0\n"
-        elif self.config.template == "data_science":
-            return "pandas>=1.5.0\nnumpy>=1.24.0\nmatplotlib>=3.6.0\njupyter>=1.0.0\n"
-        return "pytest>=7.0.0\n"
-    
-    def initialize_git(self):
-        """Git初期化"""
-        project_path = Path(self.config.path) / self.config.name
-        os.system(f"cd '{project_path}' && git init")
-        os.system(f"cd '{project_path}' && git add .")
-        os.system(f"cd '{project_path}' && git commit -m 'Initial commit'")
-    
-    def create_virtual_env(self):
-        """仮想環境作成"""
-        project_path = Path(self.config.path) / self.config.name
-        os.system(f"cd '{project_path}' && python -m venv venv")
-
-
-class MainWindow(QMainWindow):
+class ProjectInitializerWindow(QMainWindow):
     """メインウィンドウ"""
     
     def __init__(self):
         super().__init__()
-        self.setWindowTitle("PJINIT - Project Initializer v1.0")
-        self.setGeometry(100, 100, 800, 600)
-        self.setup_ui()
+        self.worker = None
+        self.init_ui()
+        self.load_settings()
+    
+    def init_ui(self):
+        """UIを初期化"""
+        self.setWindowTitle("技術の泉シリーズプロジェクト初期化ツール v1.2")
+        self.setGeometry(100, 100, 1000, 700)
         
-    def setup_ui(self):
-        """UI設定"""
-        central_widget = QWidget()
-        self.setCentralWidget(central_widget)
+        # メインウィジェット
+        main_widget = QWidget()
+        self.setCentralWidget(main_widget)
         
-        layout = QVBoxLayout(central_widget)
-        
-        # タイトル
-        title_label = QLabel("PJINIT - Project Initializer")
-        title_label.setFont(QFont("Arial", 16, QFont.Weight.Bold))
-        title_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        layout.addWidget(title_label)
+        # レイアウト
+        layout = QVBoxLayout(main_widget)
         
         # タブウィジェット
-        tab_widget = QTabWidget()
+        tabs = QTabWidget()
+        layout.addWidget(tabs)
         
-        # 基本設定タブ
-        basic_tab = self.create_basic_tab()
-        tab_widget.addTab(basic_tab, "基本設定")
+        # 初期化タブ
+        init_tab = self._create_init_tab()
+        tabs.addTab(init_tab, "プロジェクト初期化")
         
-        # 詳細設定タブ
-        advanced_tab = self.create_advanced_tab()
-        tab_widget.addTab(advanced_tab, "詳細設定")
+        # 設定タブ
+        settings_tab = self._create_settings_tab()
+        tabs.addTab(settings_tab, "設定")
         
-        layout.addWidget(tab_widget)
-        
-        # プログレスバー
+        # ステータスバー
+        self.status_bar = self.statusBar()
         self.progress_bar = QProgressBar()
         self.progress_bar.setVisible(False)
-        layout.addWidget(self.progress_bar)
+        self.status_bar.addPermanentWidget(self.progress_bar)
         
-        # ボタン
-        button_layout = QHBoxLayout()
-        
-        self.create_button = QPushButton("プロジェクト作成")
-        self.create_button.clicked.connect(self.create_project)
-        button_layout.addWidget(self.create_button)
-        
-        quit_button = QPushButton("終了")
-        quit_button.clicked.connect(self.close)
-        button_layout.addWidget(quit_button)
-        
-        layout.addLayout(button_layout)
+        # メニューバー
+        self._create_menu_bar()
     
-    def create_basic_tab(self) -> QWidget:
-        """基本設定タブ作成"""
+    def _create_init_tab(self):
+        """初期化タブを作成"""
         widget = QWidget()
         layout = QVBoxLayout(widget)
         
-        # プロジェクト名
-        name_group = QGroupBox("プロジェクト情報")
-        name_layout = QVBoxLayout(name_group)
+        # Nコード入力
+        input_group = QGroupBox("プロジェクト情報")
+        input_layout = QGridLayout()
         
-        name_layout.addWidget(QLabel("プロジェクト名:"))
-        self.name_edit = QLineEdit()
-        self.name_edit.setPlaceholderText("my_project")
-        name_layout.addWidget(self.name_edit)
+        input_layout.addWidget(QLabel("Nコード:"), 0, 0)
+        self.n_code_input = QLineEdit()
+        self.n_code_input.setPlaceholderText("例: N09999")
+        input_layout.addWidget(self.n_code_input, 0, 1)
         
-        name_layout.addWidget(QLabel("説明:"))
-        self.description_edit = QTextEdit()
-        self.description_edit.setMaximumHeight(100)
-        self.description_edit.setPlaceholderText("プロジェクトの説明を入力...")
-        name_layout.addWidget(self.description_edit)
+        self.check_button = QPushButton("情報確認")
+        self.check_button.clicked.connect(self.check_project_info)
+        input_layout.addWidget(self.check_button, 0, 2)
         
-        layout.addWidget(name_group)
+        input_group.setLayout(input_layout)
+        layout.addWidget(input_group)
         
-        # プロジェクトパス
-        path_group = QGroupBox("保存場所")
-        path_layout = QVBoxLayout(path_group)
+        # プロジェクト情報表示
+        info_group = QGroupBox("確認結果")
+        info_layout = QGridLayout()
         
-        path_input_layout = QHBoxLayout()
-        self.path_edit = QLineEdit()
-        self.path_edit.setText(str(Path.home() / "Projects"))
-        path_input_layout.addWidget(self.path_edit)
+        self.info_display = QTextEdit()
+        self.info_display.setReadOnly(True)
+        self.info_display.setMinimumHeight(200)
+        self.info_display.setMaximumHeight(300)
+        info_layout.addWidget(self.info_display, 0, 0, 1, 2)
         
-        browse_button = QPushButton("参照...")
-        browse_button.clicked.connect(self.browse_path)
-        path_input_layout.addWidget(browse_button)
+        info_group.setLayout(info_layout)
+        layout.addWidget(info_group)
         
-        path_layout.addLayout(path_input_layout)
-        layout.addWidget(path_group)
+        # 実行オプション
+        options_group = QGroupBox("実行オプション")
+        options_layout = QVBoxLayout()
         
-        # テンプレート選択
-        template_group = QGroupBox("テンプレート")
-        template_layout = QVBoxLayout(template_group)
+        self.create_slack_cb = QCheckBox("Slackチャンネルを作成")
+        self.create_slack_cb.setChecked(True)
+        options_layout.addWidget(self.create_slack_cb)
         
-        template_layout.addWidget(QLabel("プロジェクト種別:"))
-        self.project_type_combo = QComboBox()
-        self.project_type_combo.addItems([
-            "Python Application",
-            "Web Application", 
-            "Data Science",
-            "Desktop GUI",
-            "CLI Tool"
-        ])
-        template_layout.addWidget(self.project_type_combo)
+        self.create_github_cb = QCheckBox("GitHubリポジトリを作成")
+        self.create_github_cb.setChecked(True)
+        options_layout.addWidget(self.create_github_cb)
         
-        template_layout.addWidget(QLabel("テンプレート:"))
-        self.template_combo = QComboBox()
-        self.template_combo.addItems([
-            "python_app",
-            "web_app",
-            "data_science",
-            "gui_app",
-            "cli_tool"
-        ])
-        template_layout.addWidget(self.template_combo)
+        self.update_sheets_cb = QCheckBox("Google Sheetsを更新")
+        self.update_sheets_cb.setChecked(True)
+        options_layout.addWidget(self.update_sheets_cb)
         
-        layout.addWidget(template_group)
-        
-        return widget
-    
-    def create_advanced_tab(self) -> QWidget:
-        """詳細設定タブ作成"""
-        widget = QWidget()
-        layout = QVBoxLayout(widget)
-        
-        # 作成者情報
-        author_group = QGroupBox("作成者情報")
-        author_layout = QVBoxLayout(author_group)
-        
-        author_layout.addWidget(QLabel("作成者:"))
-        self.author_edit = QLineEdit()
-        self.author_edit.setPlaceholderText("Your Name")
-        author_layout.addWidget(self.author_edit)
-        
-        author_layout.addWidget(QLabel("ライセンス:"))
-        self.license_combo = QComboBox()
-        self.license_combo.addItems(["MIT", "Apache 2.0", "GPL-3.0", "BSD-3-Clause", "Proprietary"])
-        author_layout.addWidget(self.license_combo)
-        
-        layout.addWidget(author_group)
-        
-        # 初期化オプション
-        options_group = QGroupBox("初期化オプション")
-        options_layout = QVBoxLayout(options_group)
-        
-        self.git_check = QCheckBox("Gitリポジトリを初期化")
-        self.git_check.setChecked(True)
-        options_layout.addWidget(self.git_check)
-        
-        self.venv_check = QCheckBox("仮想環境を作成")
-        self.venv_check.setChecked(True)
-        options_layout.addWidget(self.venv_check)
-        
+        options_group.setLayout(options_layout)
         layout.addWidget(options_group)
         
+        # 実行ボタン
+        button_layout = QHBoxLayout()
+        button_layout.addStretch()
+        
+        self.execute_button = QPushButton("プロジェクト初期化実行")
+        self.execute_button.clicked.connect(self.execute_initialization)
+        self.execute_button.setEnabled(False)
+        button_layout.addWidget(self.execute_button)
+        
+        layout.addLayout(button_layout)
+        
+        # ログ表示
+        log_group = QGroupBox("実行ログ")
+        log_layout = QVBoxLayout()
+        
+        self.log_display = QTextEdit()
+        self.log_display.setReadOnly(True)
+        log_layout.addWidget(self.log_display)
+        
+        log_group.setLayout(log_layout)
+        layout.addWidget(log_group)
+        
         return widget
     
-    def browse_path(self):
-        """パス参照ダイアログ"""
-        path = QFileDialog.getExistingDirectory(self, "プロジェクト保存先を選択")
-        if path:
-            self.path_edit.setText(path)
+    def _create_settings_tab(self):
+        """設定タブを作成"""
+        widget = QWidget()
+        layout = QVBoxLayout(widget)
+        
+        # API設定
+        api_group = QGroupBox("API設定")
+        api_layout = QGridLayout()
+        
+        # Slack Token
+        api_layout.addWidget(QLabel("Slack Bot Token:"), 0, 0)
+        self.slack_token_input = QLineEdit()
+        self.slack_token_input.setEchoMode(QLineEdit.EchoMode.Password)
+        api_layout.addWidget(self.slack_token_input, 0, 1)
+        
+        # GitHub Token
+        api_layout.addWidget(QLabel("GitHub Token:"), 1, 0)
+        self.github_token_input = QLineEdit()
+        self.github_token_input.setEchoMode(QLineEdit.EchoMode.Password)
+        api_layout.addWidget(self.github_token_input, 1, 1)
+        
+        # Google Sheets ID
+        api_layout.addWidget(QLabel("発行計画シートID:"), 2, 0)
+        self.planning_sheet_input = QLineEdit()
+        api_layout.addWidget(self.planning_sheet_input, 2, 1)
+        
+        api_layout.addWidget(QLabel("購入リストシートID:"), 3, 0)
+        self.purchase_sheet_input = QLineEdit()
+        api_layout.addWidget(self.purchase_sheet_input, 3, 1)
+        
+        api_group.setLayout(api_layout)
+        layout.addWidget(api_group)
+        
+        # 保存ボタン
+        save_button = QPushButton("設定を保存")
+        save_button.clicked.connect(self.save_settings)
+        layout.addWidget(save_button)
+        
+        layout.addStretch()
+        
+        return widget
     
-    def create_project(self):
-        """プロジェクト作成実行"""
-        # 入力検証
-        if not self.name_edit.text().strip():
-            QMessageBox.warning(self, "エラー", "プロジェクト名を入力してください")
+    def _create_menu_bar(self):
+        """メニューバーを作成"""
+        menubar = self.menuBar()
+        
+        # ファイルメニュー
+        file_menu = menubar.addMenu("ファイル")
+        
+        exit_action = QAction("終了", self)
+        exit_action.triggered.connect(self.close)
+        file_menu.addAction(exit_action)
+        
+        # ヘルプメニュー
+        help_menu = menubar.addMenu("ヘルプ")
+        
+        about_action = QAction("このツールについて", self)
+        about_action.triggered.connect(self.show_about)
+        help_menu.addAction(about_action)
+    
+    def load_settings(self):
+        """設定を読み込み"""
+        # 環境変数から読み込み
+        self.slack_token_input.setText(os.getenv("SLACK_BOT_TOKEN", ""))
+        self.github_token_input.setText(os.getenv("GITHUB_ORG_TOKEN", ""))
+        self.planning_sheet_input.setText("17DKsMGQ6krbhY7GIcX0iaeN-y8HcGGVkXt3d4oOckyQ")
+        self.purchase_sheet_input.setText("1JJ_C3z0txlJWiyEDl0c6OoVD5Ym_IoZJMMf5o76oV4c")
+    
+    def save_settings(self):
+        """設定を保存"""
+        QMessageBox.information(self, "設定保存", "設定を保存しました")
+    
+    def check_project_info(self):
+        """プロジェクト情報を確認"""
+        n_code = self.n_code_input.text().strip()
+        if not n_code:
+            QMessageBox.warning(self, "エラー", "Nコードを入力してください")
             return
         
-        if not self.path_edit.text().strip():
-            QMessageBox.warning(self, "エラー", "保存先パスを指定してください")
+        if not google_sheets_available:
+            QMessageBox.warning(self, "エラー", "Google Sheets連携が利用できません")
             return
         
-        # 設定作成
-        config = ProjectConfig(
-            name=self.name_edit.text().strip(),
-            path=self.path_edit.text().strip(),
-            project_type=self.project_type_combo.currentText(),
-            template=self.template_combo.currentText(),
-            description=self.description_edit.toPlainText().strip(),
-            author=self.author_edit.text().strip(),
-            license=self.license_combo.currentText(),
-            git_init=self.git_check.isChecked(),
-            virtual_env=self.venv_check.isChecked()
-        )
+        # ワーカースレッドで実行
+        params = {
+            "n_code": n_code,
+            "planning_sheet_id": self.planning_sheet_input.text(),
+            "purchase_sheet_id": self.purchase_sheet_input.text()
+        }
         
-        # 重複チェック
-        project_path = Path(config.path) / config.name
-        if project_path.exists():
-            reply = QMessageBox.question(
-                self, "確認",
-                f"プロジェクト '{config.name}' は既に存在します。\n上書きしますか？",
-                QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No
-            )
-            if reply == QMessageBox.StandardButton.No:
-                return
+        self.worker = WorkerThread("check_project", params)
+        self.worker.progress.connect(self.update_progress)
+        self.worker.finished.connect(self.on_check_finished)
+        self.worker.error.connect(self.on_error)
         
-        # ワーカースレッド開始
-        self.create_button.setEnabled(False)
+        self.check_button.setEnabled(False)
         self.progress_bar.setVisible(True)
-        self.progress_bar.setValue(0)
-        
-        self.worker = ProjectInitializerWorker(config)
-        self.worker.progress_updated.connect(self.update_progress)
-        self.worker.finished.connect(self.creation_finished)
         self.worker.start()
     
-    def update_progress(self, value: int, message: str):
-        """プログレス更新"""
-        self.progress_bar.setValue(value)
-        self.statusBar().showMessage(message)
-    
-    def creation_finished(self, success: bool, message: str):
-        """作成完了処理"""
-        self.create_button.setEnabled(True)
+    def on_check_finished(self, result):
+        """情報確認完了"""
+        self.check_button.setEnabled(True)
         self.progress_bar.setVisible(False)
-        self.statusBar().clearMessage()
         
-        if success:
-            QMessageBox.information(self, "完了", message)
-        else:
-            QMessageBox.critical(self, "エラー", message)
+        # 情報を表示（書籍名を最初に表示）
+        book_title = result.get('book_title', 'なし')
+        info_text = f"""
+【書籍名】: {book_title}
+Nコード: {result['n_code']}
+リポジトリ名: {result['repository_name']}
 
+【著者情報】
+著者メール: {result.get('author_email', 'なし')}
+GitHub: {result.get('github_account', 'なし')}
+Slack ID: {result.get('slack_user_id', 'なし')}
 
-def print_help():
-    """ヘルプ表示"""
-    help_text = """
-PJINIT v1.0 - Project Initializer
-
-使用方法:
-  python main.py [オプション]
-
-オプション:
-  -h, --help     このヘルプを表示
-  -v, --version  バージョン情報を表示
-  -c, --cli      CLIモードで起動
-
-例:
-  python main.py              # GUI/CLIモード（環境により自動選択）
-  python main.py --cli        # CLIモード強制起動
-  python main.py --help       # ヘルプ表示
+【その他】
+書籍URL（購入リスト）: {result.get('book_url_from_purchase', 'なし')}
 """
-    print(help_text)
+        self.info_display.setText(info_text)
+        self.execute_button.setEnabled(True)
+        
+        # 結果を保存
+        self.current_project_info = result
+    
+    def execute_initialization(self):
+        """プロジェクト初期化を実行"""
+        reply = QMessageBox.question(
+            self, 
+            "確認", 
+            "プロジェクト初期化を実行しますか？",
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No
+        )
+        
+        if reply != QMessageBox.StandardButton.Yes:
+            return
+        
+        # パラメータ準備
+        params = {
+            "n_code": self.n_code_input.text(),
+            "planning_sheet_id": self.planning_sheet_input.text(),
+            "purchase_sheet_id": self.purchase_sheet_input.text(),
+            "slack_token": self.slack_token_input.text(),
+            "github_token": self.github_token_input.text(),
+            "create_slack_channel": self.create_slack_cb.isChecked(),
+            "create_github_repo": self.create_github_cb.isChecked(),
+            "update_sheets": self.update_sheets_cb.isChecked()
+        }
+        
+        self.worker = WorkerThread("initialize_project", params)
+        self.worker.progress.connect(self.update_progress)
+        self.worker.finished.connect(self.on_init_finished)
+        self.worker.error.connect(self.on_error)
+        
+        self.execute_button.setEnabled(False)
+        self.progress_bar.setVisible(True)
+        self.log_display.clear()
+        self.worker.start()
+    
+    def on_init_finished(self, result):
+        """初期化完了"""
+        self.execute_button.setEnabled(True)
+        self.progress_bar.setVisible(False)
+        
+        # 結果をログに表示
+        log_text = "=== プロジェクト初期化完了 ===\n\n"
+        
+        if result.get("slack_channel"):
+            book_title = result.get('project_info', {}).get('book_title', 'なし')
+            log_text += f"✓ Slackチャンネル作成: #{result['slack_channel']['name']}\n"
+            if book_title != 'なし':
+                log_text += f"  - トピック: {book_title}\n"
+            log_text += f"  - 説明: 入稿メモURL設定済み\n"
+            log_text += f"  - 招待メンバー: 山城敬、TechZip PDF Bot、GitHub App、著者\n"
+        
+        if result.get("github_repo"):
+            log_text += f"✓ GitHubリポジトリ作成: {result['github_repo']['html_url']}\n"
+            log_text += f"  - yamashirotakashi（編集者）をadmin権限でコラボレーター追加\n"
+            if result['github_repo'].get('invitation_failed'):
+                log_text += f"  - 著者のコラボレーター追加は手動タスクに登録\n"
+            else:
+                log_text += f"  - 著者もコラボレーターとして追加済み\n"
+        
+        if result.get("manual_tasks"):
+            log_text += "\n🔴 手動タスク:\n"
+            for task in result["manual_tasks"]:
+                if task["type"] == "slack_invitation":
+                    if "user_id" in task:
+                        log_text += f"- 【重要】{task['email']} (ID: {task['user_id']}) をSlackチャンネルに招待してください\n"
+                    else:
+                        log_text += f"- 【重要】{task['email']} をSlackワークスペースに招待してください（新規ユーザー）\n"
+                elif task["type"] == "github_invitation":
+                    log_text += f"- 【重要】GitHub {task['github_username']} をリポジトリに招待してください\n"
+                elif task["type"] == "github_app_invitation":
+                    channel_name = task.get("channel_name", "チャンネル")
+                    repo_name = task.get("repository_name", "リポジトリ")
+                    log_text += f"- 【重要】GitHub App設定:\n"
+                    log_text += f"  1. 著者のGitHub招待メールを確認・承認\n"
+                    log_text += f"  2. #{channel_name} で `/invite @GitHub` を実行\n"
+                    log_text += f"  3. #{channel_name} で `/github subscribe {repo_name}` を実行\n"
+        
+        # ワークフロー管理システム統合結果
+        if result.get("workflow_posted"):
+            log_text += "\n✓ ワークフロー管理システム統合完了\n"
+            log_text += "  - 全実行結果を管理チャンネル（-管理channel）に投稿\n"
+            if self.update_sheets_cb.isChecked():
+                log_text += "  - 手動タスク管理シートに記録を追加\n"
+        elif result.get("workflow_posted") is False:
+            log_text += "\n[WARN] 手動タスク管理シート更新に失敗\n"
+            log_text += "  - 管理チャンネルへの実行結果投稿は完了済み\n"
+        
+        self.log_display.append(log_text)
+        
+        QMessageBox.information(self, "完了", "プロジェクト初期化が完了しました")
+    
+    def update_progress(self, message):
+        """進捗を更新"""
+        self.status_bar.showMessage(message)
+        self.log_display.append(f"[{datetime.now().strftime('%H:%M:%S')}] {message}")
+    
+    def on_error(self, error_message):
+        """エラー処理"""
+        self.check_button.setEnabled(True)
+        self.execute_button.setEnabled(True)
+        self.progress_bar.setVisible(False)
+        
+        self.log_display.append(f"\n[ERROR] エラー: {error_message}")
+        QMessageBox.critical(self, "エラー", error_message)
+    
+    def show_about(self):
+        """アプリケーション情報を表示"""
+        QMessageBox.about(
+            self,
+            "プロジェクト初期化ツールについて",
+            "技術の泉シリーズ プロジェクト初期化ツール\n\n"
+            "Version 1.2.0\n"
+            "© 2025 TechBridge Project"
+        )
 
 
 def run_cli_mode():
-    """CLIモード実行"""
-    print("\n=== PJINIT v1.0 - CLI Mode ===")
+    """CLIモードで実行"""
+    print("=== PJINIT - Project Initializer CLI Mode ===")
+    print("技術の泉シリーズプロジェクト初期化ツール v1.2")
+    print("WSL環境のためCLIモードで動作しています。")
+    print("\n機能:")
+    print("- N-code指定プロジェクト初期化")
+    print("- Slack/GitHub/Google Sheets連携")
+    print("- 技術の泉シリーズ専用ワークフロー")
+    print("\nGUIモードを使用するにはWindows環境で実行してください。")
     
     try:
-        # プロジェクト名入力
-        try:
-            project_name = input("プロジェクト名を入力してください: ").strip()
-            if not project_name:
-                print("エラー: プロジェクト名が必要です")
-                return
-        except EOFError:
-            print("\n入力がキャンセルされました")
-            return
-        
-        # プロジェクトパス入力
-        default_path = str(Path.home() / "Projects")
-        try:
-            project_path = input(f"保存先パス [{default_path}]: ").strip()
-            if not project_path:
-                project_path = default_path
-        except EOFError:
-            print("\n入力がキャンセルされました")
-            return
-        
-        # プロジェクトタイプ選択
-        types = [
-            "Python Application",
-            "Web Application", 
-            "Data Science",
-            "Desktop GUI",
-            "CLI Tool"
-        ]
-        
-        print("\nプロジェクトタイプを選択してください:")
-        for i, t in enumerate(types, 1):
-            print(f"  {i}. {t}")
-        
-        while True:
-            try:
-                choice = int(input("選択 (1-5): "))
-                if 1 <= choice <= 5:
-                    project_type = types[choice - 1]
-                    break
-                else:
-                    print("1-5の数字を入力してください")
-            except ValueError:
-                print("数字を入力してください")
-        
-        # テンプレート選択
-        templates = ["python_app", "web_app", "data_science", "gui_app", "cli_tool"]
-        template = templates[choice - 1]
-        
-        # 説明入力
-        description = input("プロジェクトの説明 (オプション): ").strip()
-        
-        # 作成者入力
-        author = input("作成者名 (オプション): ").strip()
-        
-        # オプション確認
-        git_init = input("Gitリポジトリを初期化しますか？ [Y/n]: ").strip().lower()
-        git_init = git_init != 'n'
-        
-        venv_create = input("仮想環境を作成しますか？ [Y/n]: ").strip().lower()
-        venv_create = venv_create != 'n'
-        
-        # 設定確認
-        print(f"\n=== 設定確認 ===")
-        print(f"プロジェクト名: {project_name}")
-        print(f"保存先: {project_path}")
-        print(f"タイプ: {project_type}")
-        print(f"テンプレート: {template}")
-        print(f"説明: {description or '(なし)'}")
-        print(f"作成者: {author or '(なし)'}")
-        print(f"Git初期化: {'Yes' if git_init else 'No'}")
-        print(f"仮想環境: {'Yes' if venv_create else 'No'}")
-        
-        confirm = input("\nこの設定でプロジェクトを作成しますか？ [Y/n]: ").strip().lower()
-        if confirm == 'n':
-            print("キャンセルしました")
-            return
-        
-        # プロジェクト設定作成
-        config = ProjectConfig(
-            name=project_name,
-            path=project_path,
-            project_type=project_type,
-            template=template,
-            description=description,
-            author=author,
-            license="MIT",
-            git_init=git_init,
-            virtual_env=venv_create
-        )
-        
-        # プロジェクト作成実行
-        print("\nプロジェクト作成中...")
-        worker = ProjectInitializerWorker(config)
-        
-        # CLIモードでは直接実行
-        print("1. プロジェクトディレクトリ作成中...")
-        worker.create_project_structure()
-        
-        print("2. 設定ファイル作成中...")
-        worker.create_config_files()
-        
-        print("3. テンプレートファイル作成中...")
-        worker.create_template_files()
-        
-        if config.git_init:
-            print("4. Gitリポジトリ初期化中...")
-            worker.initialize_git()
-        
-        if config.virtual_env:
-            print("5. 仮想環境作成中...")
-            worker.create_virtual_env()
-        
-        print(f"\n✅ プロジェクト '{project_name}' の作成が完了しました！")
-        print(f"📁 場所: {Path(project_path) / project_name}")
-        
-    except KeyboardInterrupt:
-        print("\n\nキャンセルしました")
-    except Exception as e:
-        print(f"\nエラーが発生しました: {e}")
-        logger.error(f"CLIモードエラー: {e}")
+        input("\nEnterキーで終了...")
+    except EOFError:
+        print("\n終了します。")
 
 
 def main():
-    """メイン関数"""
-    # ログディレクトリ作成
-    log_dir = Path("logs")
-    log_dir.mkdir(exist_ok=True)
-    
-    logger.info("PJINIT v1.0 起動開始")
-    
-    # コマンドライン引数チェック
-    if len(sys.argv) > 1:
-        if sys.argv[1] in ['--help', '-h']:
-            print_help()
-            return
-        elif sys.argv[1] in ['--cli', '-c']:
-            run_cli_mode()
-            return
-        elif sys.argv[1] in ['--version', '-v']:
-            print("PJINIT v1.0 - Project Initializer")
-            return
-    
-    # WSL環境チェック
-    is_wsl = 'microsoft' in os.uname().release.lower() if hasattr(os, 'uname') else False
-    display_available = 'DISPLAY' in os.environ
-    
+    """メインエントリーポイント"""
     # WSL環境では常にCLIモードを使用（X11接続が不安定なため）
     if is_wsl:
-        logger.warning("WSL環境が検出されました。CLIモードで起動します。")
-        print("WSL環境のため、CLIモードで起動します。")
-        if display_available:
-            print("（DISPLAY変数は設定されていますが、X11接続が不安定な可能性があります）")
-        print("GUIを強制的に使用する場合は、別途X11サーバーの設定を確認してください。")
+        print("WSL環境が検出されました。CLIモードで起動します。")
+        run_cli_mode()
+        return
+    
+    if not pyqt6_available:
+        print("PyQt6が利用できません。CLIモードで起動します。")
         run_cli_mode()
         return
     
     try:
-        app = QApplication(sys.argv)
-        app.setApplicationName("PJINIT")
-        app.setApplicationVersion("1.0")
+        # 統一設定管理の使用
+        from config.settings import settings as pjinit_settings
         
-        # メインウィンドウ作成
-        window = MainWindow()
+        # サービス状態のレポート
+        service_status = pjinit_settings.get_service_status()
+        for service, available in service_status.items():
+            if available:
+                safe_print(f"✅ {service} サービス: 利用可能")
+            else:
+                safe_print(f"⚠️ {service} サービス: 設定不完全")
+        
+        app = QApplication(sys.argv)
+        app.setStyle("Fusion")
+        
+        # asyncqtイベントループを設定
+        if QEventLoop:
+            loop = QEventLoop(app)
+            asyncio.set_event_loop(loop)
+        
+        # メインウィンドウ表示
+        window = ProjectInitializerWindow()
         window.show()
         
-        logger.info("GUI起動完了")
-        
-        # イベントループ開始
-        sys.exit(app.exec())
-        
+        # イベントループ実行（修正版）
+        if QEventLoop:
+            try:
+                # asyncqt専用の実行方法
+                with loop:
+                    app.exec()
+            except Exception as loop_error:
+                safe_print(f"⚠️ asyncqt実行エラー: {loop_error}")
+                # フォールバック: 標準Qt実行
+                sys.exit(app.exec())
+        else:
+            sys.exit(app.exec())
+    
     except Exception as e:
-        logger.error(f"GUI起動に失敗: {e}")
-        print(f"GUI起動に失敗しました: {e}")
-        print("CLIモードで起動します...")
+        safe_print(f"GUI起動エラー: {e}")
+        safe_print("CLIモードで起動します...")
         run_cli_mode()
 
 

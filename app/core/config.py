@@ -73,6 +73,10 @@ class Settings(BaseSettings):
     GOOGLE_SHEETS_ID: str = "your-google-sheets-id"
     GOOGLE_SERVICE_ACCOUNT_KEY: str = '{"type": "service_account"}'  # JSON string or file path
     
+    # GitHub
+    GITHUB_TOKEN: str = "ghp_your-github-token"
+    GITHUB_ORG: Optional[str] = None  # Optional organization name
+    
     # External Systems
     TECH_WEBHOOK_SECRET: str = "your-tech-webhook-secret"
     TECHZIP_WEBHOOK_SECRET: str = "your-techzip-webhook-secret"
