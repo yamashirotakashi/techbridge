@@ -1,0 +1,119 @@
+# TechBridge パス設定ファイル
+# 外部化されたファイルパス・ディレクトリ設定
+---
+version: "1.0"
+created_at: "2025-08-14"
+
+# 基本パス設定
+base_paths:
+  # 開発環境ルート（環境変数で上書き可能）
+  dev_root: "/mnt/c/Users/tky99/dev"
+  
+  # プロジェクトルート
+  project_root: "${DEV_ROOT}/techbridge"
+  
+  # 外部ツールパス
+  external_tools:
+    techzip:
+      exe_path: "${DEV_ROOT}/technical-fountain-series-support-tool/dist/TechZip.exe"
+      main_path: "${DEV_ROOT}/technical-fountain-series-support-tool/main.py"
+    
+    pjinit:
+      exe_path: "${DEV_ROOT}/techbridge/app/mini_apps/project_initializer/dist/PJinit.1.1.exe"
+      main_path: "${DEV_ROOT}/techbridge/app/mini_apps/project_initializer/main.py"
+
+# 動的パス設定（プレースホルダー使用）
+dynamic_paths:
+  # プロジェクト関連パス
+  projects:
+    base: "/projects"
+    project_dir: "/projects/{n_number}"
+  
+  # 出力パス
+  output:
+    base: "/output"
+    pdf_file: "/output/{n_number}.pdf"
+    
+  # 配布パス
+  distribution:
+    base: "/dist"
+    project_dist: "/dist/{n_number}"
+    final_dist: "/dist/{n_number}/final"
+
+# 設定ファイルパス
+config_files:
+  # UI状態保存
+  ui_state: "ui_state.json"
+  
+  # アプリケーション設定
+  app_config: "config.json"
+  
+  # ログ設定
+  log_config: "logging.yaml"
+
+# 一時ファイル・キャッシュパス
+temp_paths:
+  # 一時ディレクトリ
+  temp_dir: "${PROJECT_ROOT}/temp"
+  
+  # インポート一時ファイル
+  import_temp: "${PROJECT_ROOT}/temp/imports"
+  
+  # キャッシュディレクトリ
+  cache_dir: "${PROJECT_ROOT}/.cache"
+
+# 監視対象パス
+watch_paths:
+  # 外部システム連携用監視ディレクトリ
+  external_import: "${PROJECT_ROOT}/temp/imports"
+  
+  # 設定ファイル監視
+  config_watch:
+    - "${PROJECT_ROOT}/config"
+    - "${PROJECT_ROOT}/*.yaml"
+    - "${PROJECT_ROOT}/*.json"
+
+# バックアップ・ログパス
+backup_paths:
+  # バックアップディレクトリ
+  backup_dir: "${PROJECT_ROOT}/backup"
+  
+  # ログディレクトリ
+  log_dir: "${PROJECT_ROOT}/logs"
+  
+  # アーカイブディレクトリ
+  archive_dir: "${PROJECT_ROOT}/archive"
+
+# セキュリティ設定
+security:
+  # 許可されるパスパターン
+  allowed_patterns:
+    - "^/projects/[a-zA-Z0-9_-]+$"
+    - "^/output/[a-zA-Z0-9_-]+\\.(pdf|docx?)$"
+    - "^/dist/[a-zA-Z0-9_-]+(/.*)?$"
+  
+  # 禁止パターン
+  forbidden_patterns:
+    - "\\.\\."  # パストラバーサル防止
+    - "/"       # ルート直接アクセス防止
+    - "\\\\"    # Windowsパス区切り防止
+
+# 環境変数マッピング
+environment_variables:
+  # パス関連環境変数
+  DEV_ROOT: "TECHWF_DEV_ROOT"
+  PROJECT_ROOT: "TECHWF_PROJECT_ROOT"
+  TEMP_DIR: "TECHWF_TEMP_DIR"
+  CACHE_DIR: "TECHWF_CACHE_DIR"
+  LOG_DIR: "TECHWF_LOG_DIR"
+
+# パス解決設定
+path_resolution:
+  # 変数展開を有効にする
+  expand_variables: true
+  
+  # 相対パス解決のベース
+  base_directory: "${PROJECT_ROOT}"
+  
+  # パス正規化を行う
+  normalize_paths: true

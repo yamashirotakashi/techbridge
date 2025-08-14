@@ -1,0 +1,104 @@
+# TechBridge UI設定ファイル
+# 外部化された寸法、スタイル、レイアウト設定
+---
+version: "1.0"
+created_at: "2025-08-14"
+
+# レイアウト設定
+layout:
+  # メインスプリッター分割比率
+  main_splitter:
+    table_ratio: 70  # テーブル部分の比率（%）
+    detail_ratio: 30 # 詳細部分の比率（%）
+
+# CSS寸法設定
+dimensions:
+  # 境界線・角丸
+  border:
+    width: "1px"
+    heavy_width: "2px"
+    radius:
+      small: "2px"
+      medium: "3px"
+      large: "4px"
+  
+  # パディング設定
+  padding:
+    table_cell: "5px"
+    header: "8px"
+    button: "8px 16px"
+    menu_item: "4px 8px"
+    theme_content: "10px"
+  
+  # 最小サイズ設定
+  minimum:
+    button_height: "30px"
+    button_width: "80px"
+  
+  # フォント設定
+  font:
+    error_size: "14px"
+
+# 進捗・アニメーション設定
+progress:
+  # 進捗バー制限
+  maximum_percentage: 90
+  
+  # イベント処理間隔（ミリ秒）
+  event_intervals:
+    table_selection_changed: 100
+    button_clicked: 50
+
+# テーブル設定
+table:
+  # カラム設定
+  columns:
+    n_number: 0
+    title: 1
+    author: 2
+    status: 3
+    updated: 4
+  
+  # スタイル設定
+  styles:
+    cell_padding: "5px"
+    header_padding: "8px"
+    border_bottom: "1px solid"
+    border_right: "1px solid"
+
+# ボタン・コントロール設定
+controls:
+  button:
+    border_radius: "4px"
+    padding: "8px 16px"
+  
+  input:
+    border_width: "1px"
+    border_radius: "4px"
+  
+  progress_bar:
+    border_width: "1px"
+    border_radius: "3px"
+    chunk_radius: "2px"
+
+# ウィンドウ・ダイアログ設定
+window:
+  # 状態保存設定
+  state_file: "ui_state.json"
+  
+  # JSON設定
+  json_formatting:
+    indent: 2
+    ensure_ascii: false
+
+# レスポンシブ設定
+responsive:
+  # ブレークポイント（将来の拡張用）
+  breakpoints:
+    small: 768
+    medium: 1024
+    large: 1440
+  
+  # 動的調整設定
+  dynamic_sizing: true
+  auto_layout: true

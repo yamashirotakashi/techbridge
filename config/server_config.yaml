@@ -1,0 +1,187 @@
+# TechBridge サーバー・ネットワーク設定ファイル
+# 外部化されたポート、タイムアウト、接続設定
+---
+version: "1.0"
+created_at: "2025-08-14"
+
+# ソケットサーバー設定
+socket_server:
+  # ポート設定（環境変数で上書き可能）
+  port: 8888
+  host: "localhost"
+  
+  # 接続設定
+  max_connections: 10
+  buffer_size: 8192
+  
+  # タイムアウト設定
+  timeouts:
+    connection: 30.0      # 接続タイムアウト（秒）
+    read: 10.0           # 読み取りタイムアウト（秒）
+    write: 10.0          # 書き込みタイムアウト（秒）
+    shutdown: 5.0        # シャットダウンタイムアウト（秒）
+
+# HTTP/API設定
+http_server:
+  # FastAPI設定
+  host: "0.0.0.0"
+  port: 8000
+  
+  # CORS設定
+  cors:
+    allow_origins: ["http://localhost:3000", "http://127.0.0.1:3000"]
+    allow_methods: ["GET", "POST", "PUT", "DELETE"]
+    allow_headers: ["*"]
+  
+  # リクエスト制限
+  rate_limiting:
+    requests_per_minute: 60
+    burst_size: 10
+  
+  # タイムアウト設定
+  timeouts:
+    request: 30.0
+    response: 30.0
+
+# データベース接続設定
+database:
+  # SQLite設定
+  sqlite:
+    timeout: 30.0
+    check_same_thread: false
+    isolation_level: null
+  
+  # 接続プール設定
+  pool:
+    max_connections: 20
+    min_connections: 2
+    connection_timeout: 30.0
+    recycle_time: 3600    # 1時間
+
+# 外部API設定
+external_apis:
+  # Google Sheets API
+  google_sheets:
+    timeout: 30.0
+    retry_attempts: 3
+    retry_delay: 1.0
+    
+    # バッチ設定
+    batch_size: 100
+    
+    # レート制限
+    requests_per_second: 10
+  
+  # Slack API
+  slack:
+    timeout: 15.0
+    retry_attempts: 3
+    retry_delay: 2.0
+    
+    # レート制限
+    requests_per_minute: 50
+
+# イベント処理設定
+event_processing:
+  # 統計初期値
+  initial_stats:
+    processed: 0
+    failed: 0
+    filtered: 0
+  
+  # イベント間隔（ミリ秒）
+  intervals:
+    table_selection_changed: 100
+    button_clicked: 50
+    ui_update: 16          # 60FPS相当
+    
+  # バッチ処理設定
+  batch_processing:
+    max_batch_size: 1000
+    batch_timeout: 5.0     # 秒
+
+# キャッシュ設定
+cache:
+  # Redis設定（オプション）
+  redis:
+    host: "localhost"
+    port: 6379
+    db: 0
+    timeout: 5.0
+    
+  # メモリキャッシュ設定
+  memory:
+    max_size: 1000
+    ttl: 3600             # 1時間
+    
+# モニタリング設定
+monitoring:
+  # ヘルスチェック
+  health_check:
+    interval: 30          # 秒
+    timeout: 10           # 秒
+    
+  # メトリクス収集
+  metrics:
+    collection_interval: 60  # 秒
+    retention_days: 30
+    
+  # ログ設定
+  logging:
+    level: "INFO"
+    rotation: "1 day"
+    retention: "30 days"
+
+# セキュリティ設定
+security:
+  # SSL/TLS設定
+  ssl:
+    enabled: false        # 開発環境では無効
+    cert_file: null
+    key_file: null
+    
+  # 認証設定
+  authentication:
+    enabled: false        # 開発環境では無効
+    token_expiry: 3600    # 1時間
+    
+  # セキュリティヘッダー
+  headers:
+    x_content_type_options: "nosniff"
+    x_frame_options: "DENY"
+    x_xss_protection: "1; mode=block"
+
+# 環境変数マッピング
+environment_variables:
+  # サーバー設定
+  SOCKET_PORT: "TECHWF_SOCKET_PORT"
+  HTTP_PORT: "TECHWF_HTTP_PORT"
+  
+  # データベース
+  DATABASE_TIMEOUT: "TECHWF_DB_TIMEOUT"
+  
+  # API設定
+  GOOGLE_TIMEOUT: "TECHWF_GOOGLE_TIMEOUT"
+  SLACK_TIMEOUT: "TECHWF_SLACK_TIMEOUT"
+  
+  # キャッシュ設定
+  REDIS_HOST: "TECHWF_REDIS_HOST"
+  REDIS_PORT: "TECHWF_REDIS_PORT"
+
+# パフォーマンス最適化
+performance:
+  # 非同期処理設定
+  async_processing:
+    max_workers: 4
+    queue_size: 1000
+    
+  # メモリ管理
+  memory_management:
+    gc_threshold: 100000
+    max_memory_mb: 512
+    
+  # I/O設定
+  io_settings:
+    read_buffer_size: 8192
+    write_buffer_size: 8192
+    async_io: true

@@ -1,0 +1,89 @@
+# TechBridge テーマ設定ファイル
+# 外部化されたカラーコードと寸法値の管理
+---
+version: "1.0"
+created_at: "2025-08-14"
+
+# テーマ設定
+themes:
+  light:
+    name: "Light Theme"
+    colors:
+      background: "#ffffff"
+      foreground: "#333333"
+      primary: "#0078d4"
+      secondary: "#6c757d"
+      accent: "#28a745"
+      warning: "#ffc107"
+      error: "#dc3545"
+      header_bg: "#f8f9fa"
+      selected: "#e3f2fd"
+      border: "#dee2e6"
+      input_border: "#ced4da"
+    styles:
+      button: "border-radius: 4px; padding: 8px 16px;"
+      table: "gridline-color: #dee2e6;"
+      input: "border: 1px solid #ced4da; border-radius: 4px;"
+
+  dark:
+    name: "Dark Theme"
+    colors:
+      background: "#2b2b2b"
+      foreground: "#ffffff"
+      primary: "#0078d4"
+      secondary: "#6c757d"
+      accent: "#28a745"
+      warning: "#ffc107"
+      error: "#dc3545"
+      header_bg: "#404040"
+      selected: "#1e3a8a"
+      border: "#555555"
+      input_border: "#555555"
+    styles:
+      button: "border-radius: 4px; padding: 8px 16px;"
+      table: "gridline-color: #555555;"
+      input: "border: 1px solid #555555; border-radius: 4px;"
+
+  classic:
+    name: "Classic Theme"
+    colors:
+      background: "#fafafa"
+      foreground: "#212529"
+      primary: "#007bff"
+      secondary: "#6c757d"
+      accent: "#28a745"
+      warning: "#ffc107"
+      error: "#dc3545"
+      header_bg: "#e9ecef"
+      selected: "#cce5ff"
+      border: "#dee2e6"
+      input_border: "#ced4da"
+    styles:
+      button: "border-radius: 4px; padding: 8px 16px;"
+      table: "gridline-color: #dee2e6;"
+      input: "border: 1px solid #ced4da; border-radius: 4px;"
+
+# 追加テーマアプリケーター設定
+theme_applicator:
+  special_colors:
+    disabled_text: "#999999"
+    manuscript_received: "#17a2b8"  # info color
+    discovered_muted: "#6c757d"     # muted color
+
+# デフォルトテーマ
+default_theme: "light"
+
+# ダイナミックカラー調整
+color_adjustments:
+  hover_brightness: -20
+  pressed_brightness: -40
+  
+# ステータス別カラーマッピング
+status_colors:
+  discovered: "#6c757d"
+  purchased: "#28a745"
+  manuscript_requested: "#ffc107"
+  manuscript_received: "#17a2b8"
+  first_proof: "#0078d4"
+  second_proof: "#007bff"
+  completed: "#28a745"
