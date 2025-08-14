@@ -1,0 +1,23 @@
+{
+  "source": "techbook_scraper",
+  "timestamp": "2025-08-14T15:02:02.456045",
+  "data": {
+    "book_title": "はじめてのAmazon GuardDuty",
+    "author_name": "張 造運",
+    "circle_name": "2024 Japan AWS Jr. Champions",
+    "price": "0円",
+    "page_count": "0",
+    "description": "",
+    "book_title_drafts": [
+      "はじめてのAmazon GuardDuty"
+    ],
+    "catchphrase_list": [],
+    "target_reader_list": [],
+    "genre": "技術書",
+    "original_url": "",
+    "release_date": "2025-08-14",
+    "email": "",
+    "twitter_account": "",
+    "notes": ""
+  }
+}
