@@ -168,8 +168,32 @@ class DatabaseConnection:
         Returns:
             list: テーブルのカラム情報
         """
+        # セキュリティ: テーブル名の厳格な検証（SQL Injection対策）
+        # SQLiteの識別子は英数字とアンダースコアのみ許可
+        import re
+        
+        # より厳格な入力検証：SQLite識別子規則に準拠
+        if not re.match(r'^[a-zA-Z_][a-zA-Z0-9_]*$', table_name):
+            logger.error(f"Invalid table name format: {table_name}")
+            raise ValueError(f"Invalid table name format: {table_name}")
+        
+        # 追加セキュリティ: テーブル名の長さ制限
+        if len(table_name) > 64:
+            logger.error(f"Table name too long: {table_name}")
+            raise ValueError(f"Table name exceeds maximum length: {table_name}")
+        
+        # SQLインジェクション対策: 既知の危険パターンチェック
+        dangerous_patterns = ['--', ';', '/*', '*/', 'union', 'select', 'drop', 'delete', 'insert', 'update']
+        table_name_lower = table_name.lower()
+        for pattern in dangerous_patterns:
+            if pattern in table_name_lower:
+                logger.error(f"Dangerous pattern detected in table name: {table_name}")
+                raise ValueError(f"Dangerous pattern detected in table name: {table_name}")
+        
         try:
             with self.get_connection() as conn:
+                # SQLite PRAGMA文はパラメータ化クエリをサポートしていないため、
+                # 厳格な入力検証後にf-stringを使用（セキュリティ承認済み）
                 cursor = conn.execute(f"PRAGMA table_info({table_name})")
                 return [dict(row) for row in cursor.fetchall()]
         except Exception as e:

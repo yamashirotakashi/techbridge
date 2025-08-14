@@ -143,8 +143,16 @@ class NNumberDatabaseSchema:
         Returns:
             list: テーブルのカラム情報
         """
+        # セキュリティ: テーブル名の検証（SQL Injection対策）
+        # SQLiteの識別子は英数字とアンダースコアのみ許可
+        import re
+        if not re.match(r'^[a-zA-Z_][a-zA-Z0-9_]*$', table_name):
+            logger.error(f"Invalid table name format: {table_name}")
+            return []
+        
         try:
             with self.get_connection() as conn:
+                # パラメータ化クエリは使えないため、検証済みテーブル名を使用
                 cursor = conn.execute(f"PRAGMA table_info({table_name})")
                 return [dict(row) for row in cursor.fetchall()]
         except Exception as e:

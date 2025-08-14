@@ -89,6 +89,15 @@ async def handle_tech_webhook(
                 detail=f"Invalid status: {status_str}"
             )
         
+        # Slackチャンネルを決定（Google Sheetsから取得予定だが、現在はデフォルト）
+        # Google Sheets連携は将来的な機能として、現在は#generalを使用
+        slack_channel = "#general"
+        
+        # 著者に基づいてチャンネルを動的に決定する場合の拡張例：
+        # author = payload.get("author", "")
+        # if author:
+        #     slack_channel = f"#{author.lower().replace(' ', '-')}"
+        
         # ワークフローアイテムを作成または更新
         item = await workflow_service.create_or_update(
             n_number=payload.get("n_number"),
@@ -97,7 +106,7 @@ async def handle_tech_webhook(
             author=payload.get("author"),
             status=new_status,
             repository_name=f"n{payload.get('n_number', '').lower()}-{payload.get('title', '').replace(' ', '-').lower()[:30]}",
-            slack_channel="#general",  # TODO: Google Sheetsから取得
+            slack_channel=slack_channel,
             workflow_metadata=payload.get("metadata", {})
         )
         

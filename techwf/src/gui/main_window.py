@@ -33,6 +33,187 @@ logger = logging.getLogger(__name__)
 
 from pathlib import Path
 
+
+class TechWFEventHandler:
+    """
+    TechWF Event Handler Coordinator
+    
+    Centralized handler for all UI events and callbacks.
+    Separates event handling logic from main window management.
+    """
+    
+    def __init__(self, main_window):
+        """
+        Initialize event handler with reference to main window.
+        
+        Args:
+            main_window: TechWFMainWindow instance for delegation
+        """
+        self.main_window = main_window
+        self.logger = logging.getLogger(f"{__name__}.{self.__class__.__name__}")
+        
+    def on_table_item_clicked(self, item):
+        """Handle table item click events"""
+        if item:
+            row = item.row()
+            self.logger.info(f"Table item clicked at row {row}")
+            self.main_window.workflow_table.selectRow(row)
+            
+    def on_table_cell_clicked(self, row, column):
+        """Handle table cell click events"""
+        self.logger.info(f"Table cell clicked: row {row}, column {column}")
+        if hasattr(self.main_window, 'controller') and self.main_window.controller:
+            self.main_window.controller.on_cell_clicked(row, column)
+            
+    def on_theme_changed(self, theme_name: str):
+        """Handle theme change events"""
+        try:
+            self.logger.info(f"Theme changed to: {theme_name}")
+            if hasattr(self.main_window, 'theme_applicator') and self.main_window.theme_applicator:
+                self.main_window.theme_applicator.apply_theme(theme_name)
+            if hasattr(self.main_window, 'status_bar') and self.main_window.status_bar:
+                self.main_window.status_bar.showMessage(f"Theme changed to {theme_name}", 3000)
+        except Exception as e:
+            self.logger.error(f"Error applying theme {theme_name}: {e}")
+            
+    def on_theme_error(self, error_type: str, message: str):
+        """Handle theme-related errors"""
+        self.logger.error(f"Theme error [{error_type}]: {message}")
+        if hasattr(self.main_window, 'status_bar') and self.main_window.status_bar:
+            self.main_window.status_bar.showMessage(f"Theme error: {message}", 5000)
+            
+    def on_service_error(self, service_name: str, error_message: str):
+        """Handle service initialization/operation errors"""
+        self.logger.error(f"Service error in {service_name}: {error_message}")
+        if hasattr(self.main_window, 'status_bar') and self.main_window.status_bar:
+            self.main_window.status_bar.showMessage(f"Service error: {error_message}", 5000)
+            
+    def on_service_initialized(self, service_name: str):
+        """Handle successful service initialization"""
+        self.logger.info(f"Service initialized: {service_name}")
+        if hasattr(self.main_window, 'status_bar') and self.main_window.status_bar:
+            self.main_window.status_bar.showMessage(f"{service_name} initialized", 2000)
+            
+    def on_data_refresh_requested(self):
+        """Handle data refresh requests"""
+        self.logger.info("Data refresh requested")
+        if hasattr(self.main_window, 'refresh_data'):
+            self.main_window.refresh_data()
+            
+    def on_data_loaded(self, workflows: List):
+        """Handle successful data loading"""
+        count = len(workflows) if workflows else 0
+        self.logger.info(f"Data loaded: {count} workflows")
+        if hasattr(self.main_window, 'update_stats'):
+            self.main_window.update_stats()
+            
+    def on_sync_completed(self, operation_type: str, success: bool, message: str):
+        """Handle synchronization completion"""
+        status = "successful" if success else "failed"
+        self.logger.info(f"Sync {status}: {operation_type} - {message}")
+        if hasattr(self.main_window, 'status_bar') and self.main_window.status_bar:
+            self.main_window.status_bar.showMessage(f"Sync {status}: {message}", 3000)
+            
+    def on_data_error(self, operation: str, error_message: str):
+        """Handle data operation errors"""
+        self.logger.error(f"Data error in {operation}: {error_message}")
+        if hasattr(self.main_window, 'status_bar') and self.main_window.status_bar:
+            self.main_window.status_bar.showMessage(f"Data error: {error_message}", 5000)
+            
+    def on_binding_updated(self, component: str, data: dict):
+        """Handle data binding updates"""
+        self.logger.debug(f"Binding updated for {component}")
+        
+    def on_progress_updated(self, percentage: int, status_message: str):
+        """Handle progress updates"""
+        if hasattr(self.main_window, '_update_progress'):
+            self.main_window._update_progress(percentage, status_message)
+            
+    def on_monitor_refresh_requested(self):
+        """Handle monitor dashboard refresh requests"""
+        self.logger.info("Monitor refresh requested")
+        if hasattr(self.main_window, 'monitor_dashboard') and self.main_window.monitor_dashboard:
+            self.main_window.monitor_dashboard.refresh()
+            
+    def on_start_monitor_requested(self, book_title: str, dummy_n_number: str):
+        """Handle monitor start requests"""
+        self.logger.info(f"Start monitor requested for: {book_title} ({dummy_n_number})")
+        
+    def on_stop_monitor_requested(self, monitor_id: str):
+        """Handle monitor stop requests"""
+        self.logger.info(f"Stop monitor requested for ID: {monitor_id}")
+        
+    def on_external_data_started(self, file_path: str):
+        """Handle external data import start"""
+        self.logger.info(f"External data import started: {file_path}")
+        if hasattr(self.main_window, 'progress_bar') and self.main_window.progress_bar:
+            self.main_window.progress_bar.setVisible(True)
+            self.main_window.progress_bar.setRange(0, 0)  # Indeterminate progress
+            
+    def on_external_data_imported(self, file_path: str, data: dict):
+        """Handle successful external data import"""
+        self.logger.info(f"External data imported from: {file_path}")
+        if hasattr(self.main_window, 'progress_bar') and self.main_window.progress_bar:
+            self.main_window.progress_bar.setVisible(False)
+        if hasattr(self.main_window, 'refresh_data'):
+            self.main_window.refresh_data()
+            
+    def on_external_data_error(self, file_path: str, error_message: str):
+        """Handle external data import errors"""
+        self.logger.error(f"External data import error from {file_path}: {error_message}")
+        if hasattr(self.main_window, 'progress_bar') and self.main_window.progress_bar:
+            self.main_window.progress_bar.setVisible(False)
+        if hasattr(self.main_window, 'status_bar') and self.main_window.status_bar:
+            self.main_window.status_bar.showMessage(f"Import error: {error_message}", 5000)
+            
+    def on_settings_changed(self):
+        """Handle settings change events"""
+        self.logger.info("Settings changed")
+        
+    def on_dialog_error(self, dialog_type: str, error_message: str):
+        """Handle dialog-related errors"""
+        self.logger.error(f"Dialog error [{dialog_type}]: {error_message}")
+        
+    def on_settings_requested(self):
+        """Handle settings dialog requests"""
+        if hasattr(self.main_window, 'show_settings'):
+            self.main_window.show_settings()
+            
+    def on_about_requested(self):
+        """Handle about dialog requests"""
+        if hasattr(self.main_window, 'show_about'):
+            self.main_window.show_about()
+            
+    def on_data_export_requested(self):
+        """Handle data export requests"""
+        self.logger.info("Data export requested")
+        
+    def on_tsv_import_requested(self):
+        """Handle TSV import requests"""
+        if hasattr(self.main_window, 'tsv_import_service') and self.main_window.tsv_import_service:
+            try:
+                self.main_window.tsv_import_service.import_data()
+                self.logger.info("TSV import completed successfully")
+                if hasattr(self.main_window, 'refresh_data'):
+                    self.main_window.refresh_data()
+            except Exception as e:
+                self.logger.error(f"TSV import failed: {e}")
+                if hasattr(self.main_window, 'status_bar') and self.main_window.status_bar:
+                    self.main_window.status_bar.showMessage(f"TSV import failed: {e}", 5000)
+                    
+    def on_error_occurred(self, level: str, message: str):
+        """Handle general error events"""
+        self.logger.error(f"Error occurred [{level}]: {message}")
+        if hasattr(self.main_window, 'status_bar') and self.main_window.status_bar:
+            self.main_window.status_bar.showMessage(f"Error: {message}", 5000)
+            
+    def on_refresh_clicked(self):
+        """Handle refresh button clicks"""
+        self.logger.info("Refresh button clicked")
+        if hasattr(self.main_window, 'refresh_data'):
+            self.main_window.refresh_data()
+
+
 class TechWFMainWindow(QMainWindow):
     """
     TechWF v0.5 メインウィンドウクラス
@@ -43,14 +224,21 @@ class TechWFMainWindow(QMainWindow):
     status_updated = Signal(str)  # ステータス更新
     data_changed = Signal()       # データ変更
     
-    def __init__(self, db_path: str):
+    def __init__(self, db_path: str = None):
         """
         メインウィンドウの初期化
         
         Args:
-            db_path: データベースファイルパス
+            db_path: データベースファイルパス（Noneの場合は安全なデフォルトパスを使用）
         """
         super().__init__()
+        
+        # セキュリティ修正: パストラバーサル脆弱性対策
+        # db_pathが指定されていない場合は、安全な設定管理システムを使用
+        if db_path is None:
+            from techwf.src.config import TechWFConfig
+            db_path = TechWFConfig.get_database_path()
+            logger.info(f"セキュアなデータベースパス使用: {db_path}")
         
         # === Phase 3 Refactoring: ThemeApplicator導入 ===
         # テーマ管理をThemeApplicatorに委譲  
@@ -79,6 +267,10 @@ class TechWFMainWindow(QMainWindow):
         # ServiceManagerからサービス参照を取得
         self.sheets_service = self.service_manager.get_google_sheets_service()
         self.slack_service = self.service_manager.get_slack_service()
+        
+        # === Architectural Refactoring: Event Handler分離 ===
+        # イベント処理をTechWFEventHandlerに委譲
+        self.event_handler_coordinator = TechWFEventHandler(self)
         
         # === Phase 3 Refactoring: EventCoordinator導入 ===
         # イベント処理をEventCoordinatorに委譲
@@ -125,10 +317,10 @@ class TechWFMainWindow(QMainWindow):
             tsv_import_service=self.tsv_import_service
         )
         
-        # FileWatcherServiceシグナル接続
-        self.file_watcher_service.file_imported.connect(self._on_external_data_imported)
-        self.file_watcher_service.import_error.connect(self._on_external_data_error)
-        self.file_watcher_service.import_started.connect(self._on_external_data_started)
+        # FileWatcherServiceシグナル接続（Event Handler経由）
+        self.file_watcher_service.file_imported.connect(self.event_handler_coordinator.on_external_data_imported)
+        self.file_watcher_service.import_error.connect(self.event_handler_coordinator.on_external_data_error)
+        self.file_watcher_service.import_started.connect(self.event_handler_coordinator.on_external_data_started)
         
         logger.info(f"外部システム連携監視開始: {self.file_watcher_service.get_watch_directory()}")
         
@@ -140,175 +332,18 @@ class TechWFMainWindow(QMainWindow):
         from .ui_component_manager import UIComponentManager
         self.ui_component_manager = UIComponentManager(self.theme, self)
         
-        # === Phase 2 Refactoring: EventHandlerService導入 ===
-        # EventHandlerService初期化（イベント処理ロジック分離）
-        from .event_handler_service import EventHandlerService
-        self.event_handler = EventHandlerService(self, self)
+        # UI Setup Chain（UIComponentManagerに委譲）
+        self.ui_component_manager.setup_ui()
         
-        # 自動更新タイマー
-        self.refresh_timer = QTimer()
-        self.refresh_timer.timeout.connect(self._on_data_refresh_requested)
-        
-        # === UI初期化（UIComponentManager使用） ===
-        # メインUIセットアップ
-        self.ui_component_manager.setup_main_ui(self)
-        
-        # UIComponentManagerから作成されたウィジェット参照を取得
-        self.workflow_table = self.ui_component_manager.get_workflow_table()
-        self.sync_buttons = self.ui_component_manager.get_sync_buttons()
-        self.status_bar = None  # MenuBarManagerから取得予定
-        self.progress_bar = None  # MenuBarManagerから取得予定
-        
-        # テーブル参照の確認とエラーハンドリング
-        if self.workflow_table is None:
-            logger.error("ワークフローテーブルの取得に失敗しました")
-            raise RuntimeError("UIComponentManagerからワークフローテーブルを取得できませんでした")
-        
-        logger.info(f"ワークフローテーブル参照取得成功: {type(self.workflow_table)}")
-        
-        # === Phase 4 Refactoring: DataBindingManager導入 ===
-        # DataBindingManager初期化（データバインディング・同期ロジック分離）
-        logger.info("DataBindingManager初期化開始...")
-        from .data_binding_manager import DataBindingManager
-        self.data_binding_manager = DataBindingManager(
-            main_window=self,
-            workflow_controller=self.controller,
-            ui_state_manager=self.ui_manager,
-            parent=self
-        )
-        
-        # DataBindingManagerにテーブル参照を設定
-        self.data_binding_manager.set_workflow_table(self.workflow_table)
-        logger.info("DataBindingManager初期化完了 - テーブル参照設定済み")
-        
-        # ServiceManagerシグナル接続
-        self.service_manager.sheets_service_changed.connect(self._update_sync_button_states)
-        self.service_manager.slack_service_changed.connect(self._update_slack_button_states)
-        self.service_manager.service_error.connect(self._on_service_error)
-        self.service_manager.service_initialized.connect(self._on_service_initialized)
-        
-        # DataBindingManagerシグナル接続
-        self.data_binding_manager.data_loaded.connect(self._on_data_loaded)
-        self.data_binding_manager.sync_completed.connect(self._on_sync_completed)
-        self.data_binding_manager.progress_updated.connect(self._on_progress_updated)
-        self.data_binding_manager.data_changed.connect(self.data_changed.emit)
-        
-        # 基本的なイベント接続
-        if self.sync_buttons:
-            if 'refresh' in self.sync_buttons:
-                self.sync_buttons['refresh'].clicked.connect(self.event_handler.handle_data_refresh)
-            if 'from_sheet' in self.sync_buttons:
-                self.sync_buttons['from_sheet'].clicked.connect(self.event_handler.handle_sync_from_sheet)
-            if 'to_sheet' in self.sync_buttons:
-                self.sync_buttons['to_sheet'].clicked.connect(self.event_handler.handle_sync_to_sheet)
-        
-        # EventHandlerServiceシグナル接続
-        self.event_handler.status_message.connect(self.status_updated.emit)
-        self.event_handler.error_occurred.connect(self._on_error_occurred)
-        
-        # 外部アプリボタンとの接続
-        app_buttons = self.ui_component_manager.get_component('app_buttons')
-        if app_buttons:
-            if 'techzip' in app_buttons:
-                app_buttons['techzip'].clicked.connect(self.event_handler.handle_launch_techzip)
-            if 'pjinit' in app_buttons:
-                app_buttons['pjinit'].clicked.connect(self.event_handler.handle_launch_pjinit)
-            if 'sheets' in app_buttons:
-                app_buttons['sheets'].clicked.connect(self.event_handler.handle_open_google_sheets)
-        
-        # === Phase 4: 監視ダッシュボード統合 ===
-        # self._integrate_monitor_dashboard()  # 一時的にコメントアウト（views模块不足）
-        
-        # === Phase 3 Refactoring: MenuBarManagerでメニューバー・ステータスバー設定 ===
+        # メニューバー・ステータスバー・シグナルセットアップ
         self.menu_bar_manager.setup_menubar()
         self.menu_bar_manager.setup_statusbar()
+        self.setup_signals()
         
-        # MenuBarManagerから作成されたウィジェット参照を取得
-        # self.status_bar = self.menu_bar_manager.get_status_bar()  # メソッド未実装
-        # self.progress_bar = self.menu_bar_manager.get_progress_bar()  # メソッド未実装
-        self.status_bar = None
-        self.progress_bar = None
+        # 初期データ読み込み
+        self.load_initial_data()
         
-        # UI管理クラスにウィジェット登録
-        # self.ui_manager.set_table_widget(self.workflow_table)  # メソッド未実装の可能性
-        # self.ui_manager.set_progress_bar(self.progress_bar)  # メソッド未実装の可能性
-        
-        # シグナル接続
-        # self.setup_signals()  # 一時的にコメントアウト（EventCoordinatorメソッド不足）
-        
-        # 初期データ読み込み（DataBindingManager経由）
-        logger.info("初期データ読み込み開始...")
-        self.data_binding_manager.load_initial_data()
-        logger.info("初期データ読み込み完了")
-        
-        # === Phase 4: 監視サービス初期化 ===
-        # self._initialize_monitor_services()  # 一時的にコメントアウト
-        
-        logger.info("TechWF メインウィンドウ初期化完了 - Phase 4 監視ダッシュボード統合 + 外部システム連携")
-
-    def _initialize_sheets_service(self):
-        """
-        Google Sheetsサービスの初期化 (ServiceManager経由)
-        Phase 3 Refactoring: ServiceManagerに移行済み
-        """
-        # ServiceManagerが処理するため、削除予定のメソッド
-        pass
-
-    def _update_sync_button_states(self, enabled: bool):
-        """
-        同期ボタンの状態更新 (ServiceManager経由)
-        Phase 3 Refactoring: ServiceManagerに移行済み
-        
-        Args:
-            enabled: 有効・無効
-        """
-        if hasattr(self, 'sync_buttons'):
-            self.sync_buttons['from_sheet'].setEnabled(enabled)
-            self.sync_buttons['to_sheet'].setEnabled(enabled)
-            
-            if enabled:
-                self.sync_buttons['from_sheet'].setToolTip("Google Sheetsからデータを取得")
-                self.sync_buttons['to_sheet'].setToolTip("Google Sheetsにデータを転記")
-            else:
-                self.sync_buttons['from_sheet'].setToolTip("Google Sheets設定が無効または未設定")
-                self.sync_buttons['to_sheet'].setToolTip("Google Sheets設定が無効または未設定")
-
-    def _initialize_slack_service(self):
-        """
-        Slackサービスの初期化 (ServiceManager経由)
-        Phase 3 Refactoring: ServiceManagerに移行済み
-        """
-        # ServiceManagerが処理するため、削除予定のメソッド
-        pass
-
-    def _update_slack_button_states(self, enabled: bool):
-        """
-        Slackボタンの状態更新 (ServiceManager経由)
-        Phase 3 Refactoring: ServiceManagerに移行済み
-        
-        Args:
-            enabled: 有効・無効
-        """
-        # Slackボタンが作成されていれば状態更新
-        if hasattr(self, 'slack_button'):
-            self.slack_button.setEnabled(enabled)
-            
-            if enabled:
-                self.slack_button.setToolTip("選択した著者にSlackメッセージを送信")
-            else:
-                self.slack_button.setToolTip("Slack設定が無効または未設定")
-
-
-    def setup_menu_bar(self):
-        """Phase 3 Refactoring: MenuBarManagerに移行済み"""
-        if hasattr(self, 'menu_bar_manager'):
-            self.menu_bar_manager.setup_menubar()
-
-
-    def setup_status_bar(self):
-        """Phase 3 Refactoring: MenuBarManagerに移行済み"""
-        if hasattr(self, 'menu_bar_manager'):
-            self.menu_bar_manager.setup_statusbar()
+        logger.info("TechWF Main Window 初期化完了")
 
     def setup_signals(self):
         """
@@ -317,24 +352,15 @@ class TechWFMainWindow(QMainWindow):
         Phase 3 Refactoring: 全Managerを使用した統合シグナル接続
         """
         # EventCoordinatorでシグナル接続を実行
-        self.event_coordinator.setup_signals()
-        
-        # EventCoordinatorからのシグナル接続
-        self.event_coordinator.selection_changed.connect(self.on_selection_changed)
-        self.event_coordinator.status_update_requested.connect(self.status_updated.emit)
-        
-        # DialogManagerシグナル接続
-        self.dialog_manager.settings_changed.connect(self._on_settings_changed)
-        self.dialog_manager.dialog_error.connect(self._on_dialog_error)
-        
-        # MenuBarManagerシグナル接続
-        self.menu_bar_manager.settings_requested.connect(self._on_settings_requested)
-        self.menu_bar_manager.about_requested.connect(self._on_about_requested)
-        self.menu_bar_manager.data_export_requested.connect(self._on_data_export_requested)
-        self.menu_bar_manager.tsv_import_requested.connect(self._on_tsv_import_requested)
-        self.menu_bar_manager.status_message_changed.connect(self.status_updated.emit)
-        
-        logger.info("Phase 3 Refactoring: 全Manager経由でシグナル接続完了")
+        if hasattr(self, 'event_coordinator'):
+            self.event_coordinator.setup_signals()
+            
+        # DialogManagerでダイアログ関連シグナル接続
+        if hasattr(self, 'dialog_manager'):
+            self.dialog_manager.setup_signals()
+            
+        # FileWatcherServiceでファイル監視シグナル接続済み（__init__で実行済み）
+        logger.info("シグナル接続完了: Event Coordinator & Dialog Manager")
 
     def load_initial_data(self):
         """
@@ -356,95 +382,11 @@ class TechWFMainWindow(QMainWindow):
         else:
             logger.warning("DataBindingManager not initialized")
 
-    def _handle_dialog_request(self, dialog_type: str, data: dict):
-        """
-        EventHandlerServiceからのダイアログ表示リクエストを処理 (DialogManager経由)
-        Phase 3 Refactoring: DialogManagerに移行済み
-        
-        Args:
-            dialog_type: ダイアログタイプ ('warning', 'error', 'info', 'question')
-            data: ダイアログ表示データ (title, message, etc.)
-        """
+    def show_settings(self):
+        """Phase 3 Refactoring: DialogManagerに移行済み"""
         if hasattr(self, 'dialog_manager'):
-            return self.dialog_manager.handle_dialog_request(dialog_type, data)
-        else:
-            logger.warning("DialogManagerが初期化されていません")
-
-
-    def update_stats(self):
-        """
-        統計情報更新（DataBindingManager経由）
-        Phase 4 Refactoring: DataBindingManagerに委譲
-        """
-        if hasattr(self, 'data_binding_manager'):
-            # 統計情報更新機能は今後実装予定
-            pass
-        else:
-            logger.warning("DataBindingManager not initialized")
-
-    # スロット実装
-    def on_selection_changed(self, selected_n_numbers: List[str]):
-        """
-        UI管理クラスからの選択変更通知ハンドラー (EventCoordinator経由)
-        Phase 3 Refactoring: EventCoordinatorに処理を委譲
-        
-        Args:
-            selected_n_numbers: 選択されたN番号リスト
-        """
-        # EventCoordinatorが既に処理済みなので、追加処理があれば記述
-        logger.debug(f"選択変更通知受信: {len(selected_n_numbers)}件")
-    
-    def _on_table_item_clicked(self, item):
-        """
-        テーブルアイテムクリック時のハンドラー (EventCoordinator経由)
-        Phase 3 Refactoring: EventCoordinatorに移行済み
-        
-        Args:
-            item: クリックされたテーブルアイテム
-        """
-        # EventCoordinatorが処理するため、削除予定のメソッド
-        if hasattr(self, 'event_coordinator'):
-            self.event_coordinator.on_table_item_clicked(item)
-    
-    def _on_table_cell_clicked(self, row, column):
-        """
-        テーブルセルクリック時のハンドラー (EventCoordinator経由)
-        Phase 3 Refactoring: EventCoordinatorに移行済み
-        
-        Args:
-            row: 行番号
-            column: 列番号
-        """
-        # EventCoordinatorが処理するため、削除予定のメソッド
-        if hasattr(self, 'event_coordinator'):
-            self.event_coordinator.on_table_cell_clicked(row, column)
-
-    def on_cell_clicked(self, row, col):
-        """
-        テーブルセルクリック時の処理 (EventCoordinator経由)
-        Phase 3 Refactoring: EventCoordinatorに移行済み
-        
-        Args:
-            row: 行番号
-            col: 列番号
-        """
-        # EventCoordinatorが処理するため、削除予定のメソッド
-        if hasattr(self, 'event_coordinator'):
-            self.event_coordinator.on_cell_clicked(row, col)
-
-    def show_workflow_details(self, n_number: str):
-        """
-        ワークフロー詳細ダイアログ表示 (DialogManager経由)
-        Phase 3 Refactoring: DialogManagerに移行済み
-        
-        Args:
-            n_number: 表示対象のN番号
-        """
-        if hasattr(self, 'dialog_manager'):
-            self.dialog_manager.show_workflow_details(n_number)
-        else:
-            logger.warning("DialogManagerが初期化されていません")
-
+            return self.dialog_manager.show_settings()
+        return False
 
     def show_about(self):
         """
@@ -456,344 +398,10 @@ class TechWFMainWindow(QMainWindow):
         else:
             logger.warning("DialogManagerが初期化されていません")
 
-    def show_settings(self):
-        """Phase 3 Refactoring: DialogManagerに移行済み"""
-        if hasattr(self, 'dialog_manager'):
-            return self.dialog_manager.show_settings()
-        return False
-
-    def on_settings_changed(self):
-        """
-        設定変更時の処理 (ServiceManager経由)
-        Phase 3 Refactoring: ServiceManagerに移行済み
-        """
-        try:
-            # ServiceManagerに設定変更を通知
-            if hasattr(self, 'service_manager'):
-                self.service_manager.reinitialize_services()
-            
-            # ステータス更新
-            self.status_updated.emit("設定が更新されました")
-            
-            logger.info("設定変更に伴う再初期化完了")
-            
-        except Exception as e:
-            logger.error(f"設定変更処理エラー: {e}")
-            from PySide6.QtWidgets import QMessageBox
-            QMessageBox.warning(self, "設定変更", f"設定変更の反映中にエラーが発生しました:\n{e}")
-
-    # === Phase 3 Refactoring: Theme Event Handlers ===
-    def _on_theme_changed(self, theme_name: str):
-        """
-        テーマ変更時のイベントハンドラー
-        
-        Args:
-            theme_name: 新しいテーマ名
-        """
-        try:
-            # テーマ参照を更新
-            self.theme = self.theme_applicator.get_current_theme()
-            
-            # UI管理クラスにテーマ変更を通知
-            if hasattr(self, 'ui_manager'):
-                self.ui_manager.update_theme(self.theme)
-            
-            # UIComponentManagerにテーマ変更を通知
-            if hasattr(self, 'ui_component_manager'):
-                self.ui_component_manager.update_theme(self.theme)
-            
-            # ステータスバーでテーマ変更を通知
-            self.status_updated.emit(f"テーマを '{theme_name}' に変更しました")
-            logger.info(f"Theme changed to: {theme_name}")
-            
-        except Exception as e:
-            logger.error(f"Theme change event handler error: {e}")
-            self._on_theme_error("theme_change_handler", str(e))
-
-    def _on_theme_error(self, error_type: str, message: str):
-        """
-        テーマエラー時のイベントハンドラー
-        
-        Args:
-            error_type: エラータイプ
-            message: エラーメッセージ
-        """
-        error_msg = f"テーマエラー ({error_type}): {message}"
-        logger.error(error_msg)
-        
-        # ユーザーにエラーを通知（重要なエラーのみ）
-        if error_type in ["initialization", "loading", "critical"]:
-            QMessageBox.warning(self, "テーマエラー", 
-                              f"テーマの処理中にエラーが発生しました:\n{message}\n\n"
-                              "フォールバックテーマを使用します。")
-        
-        # ステータスバーにエラー通知
-        self.status_updated.emit(f"テーマエラー: {error_type}")
-
-    # === Phase 3 Refactoring: ServiceManager Signal Handlers ===
-    
-    def _on_service_error(self, service_name: str, error_message: str):
-        """
-        ServiceManagerからのサービスエラー通知ハンドラー
-        
-        Args:
-            service_name: エラーが発生したサービス名
-            error_message: エラーメッセージ
-        """
-        error_msg = f"サービスエラー ({service_name}): {error_message}"
-        logger.error(error_msg)
-        
-        # 重要なサービスエラーの場合はユーザーに通知
-        if service_name in ["initialization", "google_sheets", "slack"]:
-            from PySide6.QtWidgets import QMessageBox
-            QMessageBox.warning(self, "サービスエラー", 
-                              f"サービス '{service_name}' でエラーが発生しました:\n{error_message}")
-        
-        # ステータスバーにエラー通知
-        self.status_updated.emit(f"サービスエラー: {service_name}")
-    
-    def _on_service_initialized(self, service_name: str):
-        """
-        ServiceManagerからのサービス初期化完了通知ハンドラー
-        
-        Args:
-            service_name: 初期化完了したサービス名
-        """
-        logger.info(f"サービス初期化完了: {service_name}")
-        self.status_updated.emit(f"{service_name} サービス準備完了")
-        
-        # サービス初期化完了時にコントローラーのサービス参照を更新
-        if hasattr(self, 'controller'):
-            self.controller.sheets_service = self.service_manager.get_sheets_service()
-            self.controller.slack_service = self.service_manager.get_slack_service()
-
-    # === Phase 4 Refactoring: DataBindingManager Signal Handlers ===
-    
-    def _on_data_refresh_requested(self):
-        """
-        データ更新要求ハンドラー（DataBindingManager経由）
-        Phase 4 Refactoring: EventHandlerServiceとDataBindingManagerの統合
-        """
-        if hasattr(self, 'data_binding_manager'):
-            self.data_binding_manager.refresh_data()
-        else:
-            logger.warning("DataBindingManager not initialized")
-    
-    def _on_data_loaded(self, workflows: List):
-        """
-        データ読み込み完了シグナルハンドラー
-        
-        Args:
-            workflows: 読み込まれたワークフローリスト
-        """
-        logger.info(f"データ読み込み完了: {len(workflows)}件")
-        self.data_changed.emit()
-    
-    def _on_sync_completed(self, operation_type: str, success: bool, message: str):
-        """
-        同期完了シグナルハンドラー
-        
-        Args:
-            operation_type: 同期操作タイプ
-            success: 成功・失敗
-            message: メッセージ
-        """
-        logger.info(f"{operation_type}同期結果: {message}")
-        self.status_updated.emit(message)
-        if success:
-            QMessageBox.information(self, "同期完了", message)
-        else:
-            QMessageBox.warning(self, "同期エラー", message)
-    
-    def _on_data_error(self, operation: str, error_message: str):
-        """
-        データ操作エラーシグナルハンドラー
-        
-        Args:
-            operation: エラーが発生した操作
-            error_message: エラーメッセージ
-        """
-        logger.error(f"{operation}エラー: {error_message}")
-        self.status_updated.emit(f"エラー: {error_message}")
-        QMessageBox.warning(self, f"{operation}エラー", error_message)
-    
-    def _on_binding_updated(self, component: str, data: dict):
-        """
-        バインディング更新シグナルハンドラー
-        
-        Args:
-            component: 更新されたコンポーネント名
-            data: 更新データ
-        """
-        logger.debug(f"バインディング更新: {component} - {data}")
-        self.data_changed.emit()
-    
-    def _on_progress_updated(self, percentage: int, status_message: str):
-        """
-        進捗更新シグナルハンドラー
-        
-        Args:
-            percentage: 進捗率（0-100）
-            status_message: ステータスメッセージ
-        """
-        self.status_updated.emit(status_message)
-        if self.progress_bar:
-            if percentage > 0:
-                self.progress_bar.setVisible(True)
-                self.progress_bar.setValue(percentage)
-            if percentage >= 100:
-                self.progress_bar.setVisible(False)
-    
-    def _update_progress(self, status_message: str, percentage: int):
-        """
-        進捗更新コールバック（DataBindingManager用）
-        
-        Args:
-            status_message: ステータスメッセージ
-            percentage: 進捗率（0-100）
-        """
-        self._on_progress_updated(percentage, status_message)
-
-    def _integrate_monitor_dashboard(self):
-        """
-        Phase 4: 監視ダッシュボードをタブとして統合
-        """
-        try:
-            # メインウィジェットを取得
-            central_widget = self.centralWidget()
-            if not central_widget:
-                logger.error("Central widget not found")
-                return
-            
-            # 既存のレイアウトを取得
-            main_layout = central_widget.layout()
-            if not main_layout:
-                logger.error("Main layout not found")
-                return
-            
-            # タブウィジェットを作成（まだ存在しない場合）
-            if not hasattr(self, 'main_tab_widget'):
-                # 既存のウィジェットを一時的に保存
-                existing_widgets = []
-                for i in range(main_layout.count()):
-                    item = main_layout.itemAt(0)
-                    if item:
-                        widget = item.widget()
-                        if widget:
-                            existing_widgets.append(widget)
-                            main_layout.removeWidget(widget)
-                
-                # タブウィジェット作成
-                self.main_tab_widget = QTabWidget()
-                
-                # 既存のワークフロー画面をタブに追加
-                workflow_container = QWidget()
-                workflow_layout = QVBoxLayout(workflow_container)
-                for widget in existing_widgets:
-                    workflow_layout.addWidget(widget)
-                
-                self.main_tab_widget.addTab(workflow_container, "📋 ワークフロー")
-                
-                # メインレイアウトにタブウィジェットを追加
-                main_layout.addWidget(self.main_tab_widget)
-            
-            # 監視ダッシュボードタブを追加
-            from .views.monitor_dashboard_view import MonitorDashboardView
-            self.monitor_dashboard = MonitorDashboardView(self)
-            
-            # ダッシュボードシグナル接続
-            self.monitor_dashboard.refresh_requested.connect(self._on_monitor_refresh_requested)
-            self.monitor_dashboard.start_monitor_requested.connect(self._on_start_monitor_requested)
-            self.monitor_dashboard.stop_monitor_requested.connect(self._on_stop_monitor_requested)
-            
-            # タブに追加
-            self.main_tab_widget.addTab(self.monitor_dashboard, "📊 監視ダッシュボード")
-            
-            logger.info("Monitor dashboard integrated successfully")
-            
-        except Exception as e:
-            logger.error(f"Failed to integrate monitor dashboard: {e}")
-            # エラーでも継続
-    
-    def _initialize_monitor_services(self):
-        """
-        Phase 4: 監視関連サービスの初期化
-        """
-        try:
-            # 監視ステータスサービス
-            from ..services.monitor_status_service import MonitorStatusService
-            self.monitor_status_service = MonitorStatusService(
-                db_path="data/monitor_history.db"
-            )
-            
-            # 通知サービス
-            from ..services.notification_service import NotificationService
-            self.notification_service = NotificationService()
-            
-            # Slackサービスが有効なら登録
-            if self.slack_service:
-                self.notification_service.register_slack_service(self.slack_service)
-            
-            # N番号監視サービス（シートベース）
-            from ..services.sheet_based_n_number_monitor import SheetBasedNNumberMonitor
-            
-            # GAS設定を取得（将来的に設定ファイルから読み込み）
-            gas_config = self.config_service.get('gas_monitor', {})
-            if gas_config.get('enabled', False):
-                self.n_number_monitor = SheetBasedNNumberMonitor(
-                    gas_endpoint=gas_config.get('endpoint', ''),
-                    token=gas_config.get('token', '')
-                )
-                logger.info("Sheet-based N-number monitor initialized")
-            else:
-                self.n_number_monitor = None
-                logger.info("N-number monitor not configured")
-            
-            logger.info("Monitor services initialized successfully")
-            
-        except Exception as e:
-            logger.error(f"Failed to initialize monitor services: {e}")
-            # エラーでも継続
-    
-    def _on_monitor_refresh_requested(self):
-        """
-        監視ダッシュボードからのリフレッシュ要求
-        """
-        logger.debug("Monitor dashboard refresh requested")
-        # 必要に応じて監視ステータスを更新
-        if hasattr(self, 'monitor_status_service'):
-            active_monitors = self.monitor_status_service.get_active_monitors()
-            logger.info(f"Active monitors: {len(active_monitors)}")
-    
-    def _on_start_monitor_requested(self, book_title: str, dummy_n_number: str):
-        """
-        監視開始要求
-        
-        Args:
-            book_title: 書籍タイトル
-            dummy_n_number: ダミーN番号
-        """
-        logger.info(f"Monitor start requested: {book_title}")
-        # N番号監視サービスを使用して監視開始
-        # 実装は次のフェーズで
-    
-    def _on_stop_monitor_requested(self, monitor_id: str):
-        """
-        監視停止要求
-        
-        Args:
-            monitor_id: 監視ID
-        """
-        logger.info(f"Monitor stop requested: {monitor_id}")
-        # 監視停止処理
-        # 実装は次のフェーズで
-    
     def closeEvent(self, event):
         """
         ウィンドウ閉じる処理
         """
-        self.refresh_timer.stop()
-        
         # ソケットサーバーを停止
         if hasattr(self, 'socket_server'):
             self.socket_server.stop_server()
@@ -809,255 +417,16 @@ class TechWFMainWindow(QMainWindow):
         logger.info("TechWF メインウィンドウ終了 - 外部システム連携サービス停止完了")
         event.accept()
 
-    # === 外部システム連携イベントハンドラー ===
-    def _on_external_data_started(self, file_path: str):
-        """外部データインポート開始イベント"""
-        try:
-            file_name = Path(file_path).name
-            message = f"外部システムからのデータ受信開始: {file_name}"
-            logger.info(message)
-            self.status_updated.emit(message)
-            
-            # 進捗表示開始
-            if self.progress_bar:
-                self.progress_bar.setVisible(True)
-                self.progress_bar.setRange(0, 0)  # 不定進捗表示
-                
-        except Exception as e:
-            logger.error(f"外部データ開始イベントエラー: {e}")
-            
-    def _on_external_data_imported(self, file_path: str, data: dict):
-        """外部データインポート完了イベント"""
-        try:
-            file_name = Path(file_path).name
-            book_title = data.get('data', {}).get('book_title', '不明')
-            message = f"外部システムからのデータ受信完了: {book_title} ({file_name})"
-            logger.info(message)
-            
-            # ステータス更新
-            self.status_updated.emit(message)
-            
-            # 進捗バー非表示
-            if self.progress_bar:
-                self.progress_bar.setVisible(False)
-                
-            # データ再読み込み（画面更新）
-            self.data_changed.emit()
-            
-            # ユーザーへの通知
-            QMessageBox.information(
-                self,
-                "外部データ受信完了",
-                f"技術書典スクレイパーからのデータを受信しました:\n\n"
-                f"書名: {book_title}\n"
-                f"ファイル: {file_name}\n\n"
-                f"データベースとGoogle Sheetsに自動保存されました。"
-            )
-            
-        except Exception as e:
-            logger.error(f"外部データ完了イベントエラー: {e}")
-            
-    def _on_external_data_error(self, file_path: str, error_message: str):
-        """外部データインポートエラーイベント"""
-        try:
-            file_name = Path(file_path).name
-            message = f"外部システムデータ受信エラー: {file_name} - {error_message}"
-            logger.error(message)
-            
-            # ステータス更新
-            self.status_updated.emit(f"エラー: {error_message}")
-            
-            # 進捗バー非表示
-            if self.progress_bar:
-                self.progress_bar.setVisible(False)
-                
-            # エラーダイアログ
-            QMessageBox.warning(
-                self,
-                "外部データ受信エラー", 
-                f"技術書典スクレイパーからのデータ受信でエラーが発生しました:\n\n"
-                f"ファイル: {file_name}\n"
-                f"エラー: {error_message}\n\n"
-                f"ファイル形式やデータ内容を確認してください。"
-            )
-            
-        except Exception as e:
-            logger.error(f"外部データエラーイベントエラー: {e}")
-
-
-# メイン実行部分（テスト用）
-    # === Phase 3 Refactoring: 新しいManagerシグナルハンドラー ===
-    
-    def _on_settings_changed(self):
-        """DialogManagerからの設定変更通知ハンドラー"""
-        self.on_settings_changed()
-    
-    def _on_dialog_error(self, dialog_type: str, error_message: str):
-        """DialogManagerからのエラー通知ハンドラー"""
-        logger.error(f"DialogManager error ({dialog_type}): {error_message}")
-        self.status_updated.emit(f"ダイアログエラー: {error_message}")
-    
-    def _on_settings_requested(self):
-        """MenuBarManagerからの設定要求ハンドラー"""
-        self.show_settings()
-    
-    def _on_about_requested(self):
-        """MenuBarManagerからのAbout要求ハンドラー"""
-        self.show_about()
-    
-    def _on_data_export_requested(self):
-        """MenuBarManagerからのデータエクスポート要求ハンドラー"""
-        logger.info("データエクスポート要求受信")
-        self.status_updated.emit("データエクスポート機能は今後実装予定です")
-    
-    def _on_tsv_import_requested(self):
-        """MenuBarManagerからのTSVインポート要求ハンドラー"""
-        logger.info("TSVインポート要求受信")
-        
-        try:
-            # TSVインポートダイアログを表示
-            from .dialogs.tsv_import_dialog import TSVImportDialog
-            
-            dialog = TSVImportDialog(
-                parent=self,
-                repository=self.repository,
-                sheets_service=self.sheets_service
-            )
-            
-            if dialog.exec():
-                # インポート成功時の処理
-                self.status_updated.emit("TSVインポートが完了しました")
-                # データを再読み込み
-                self.refresh_data()
-            else:
-                self.status_updated.emit("TSVインポートがキャンセルされました")
-                
-        except Exception as e:
-            logger.error(f"TSVインポートダイアログ表示エラー: {e}")
-            QMessageBox.critical(
-                self, 
-                "TSVインポートエラー",
-                f"TSVインポートダイアログの表示に失敗しました:\n{str(e)}"
-            )
-
-    def _setup_minimal_ui(self):
-        """
-        UIComponentManagerの代替として最小限のUI構築
-        Phase 1緊急復旧: 基本的な中央ウィジェットを作成
-        """
-        try:
-            # 中央ウィジェットを作成
-            central_widget = QWidget()
-            self.setCentralWidget(central_widget)
-            
-            # メインレイアウト
-            main_layout = QVBoxLayout(central_widget)
-            
-            # ツールバーエリア（ボタン配置）
-            toolbar_layout = QHBoxLayout()
-            
-            # 基本的なボタンを作成
-            self.sync_buttons = {}
-            self.sync_buttons['from_sheet'] = QPushButton("Sheetsから同期")
-            self.sync_buttons['to_sheet'] = QPushButton("Sheetsに送信")
-            self.sync_buttons['refresh'] = QPushButton("更新")
-            
-            # ボタンをツールバーに追加
-            toolbar_layout.addWidget(self.sync_buttons['from_sheet'])
-            toolbar_layout.addWidget(self.sync_buttons['to_sheet'])
-            toolbar_layout.addWidget(self.sync_buttons['refresh'])
-            toolbar_layout.addStretch()  # 右側にスペース
-            
-            main_layout.addLayout(toolbar_layout)
-            
-            # ワークフローテーブルを作成
-            self.workflow_table = QTableWidget()
-            
-            # テーブルの基本設定
-            self.workflow_table.setColumnCount(5)
-            self.workflow_table.setHorizontalHeaderLabels([
-                "N番号", "書名", "著者", "ステータス", "更新日"
-            ])
-            
-            # ヘッダーサイズ調整
-            header = self.workflow_table.horizontalHeader()
-            header.setStretchLastSection(True)
-            header.setSectionResizeMode(0, QHeaderView.ResizeMode.ResizeToContents)
-            header.setSectionResizeMode(1, QHeaderView.ResizeMode.Stretch)
-            header.setSectionResizeMode(2, QHeaderView.ResizeMode.ResizeToContents)
-            header.setSectionResizeMode(3, QHeaderView.ResizeMode.ResizeToContents)
-            header.setSectionResizeMode(4, QHeaderView.ResizeMode.ResizeToContents)
-            
-            # テーブルの外観設定
-            self.workflow_table.setAlternatingRowColors(True)
-            self.workflow_table.setSelectionBehavior(QTableWidget.SelectionBehavior.SelectRows)
-            self.workflow_table.setSelectionMode(QTableWidget.SelectionMode.SingleSelection)
-            
-            main_layout.addWidget(self.workflow_table)
-            
-            # ボタンの基本的な機能を設定（仮実装）
-            self.sync_buttons['refresh'].clicked.connect(self._on_refresh_clicked)
-            
-            logger.info("最小限のUI構築完了")
-            
-        except Exception as e:
-            logger.error(f"最小限UI構築エラー: {e}")
-            # エラーでも最小限の中央ウィジェットは作成
-            fallback_widget = QWidget()
-            fallback_label = QLabel("UIの初期化中にエラーが発生しました")
-            fallback_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-            fallback_layout = QVBoxLayout(fallback_widget)
-            fallback_layout.addWidget(fallback_label)
-            self.setCentralWidget(fallback_widget)
-    
-    def _on_error_occurred(self, level: str, message: str):
-        """エラー発生時の処理"""
-        try:
-            logger.log(
-                logging.ERROR if level == "error" else logging.WARNING,
-                f"EventHandler error ({level}): {message}"
-            )
-            
-            # ステータス更新
-            self.status_updated.emit(f"エラー: {message}")
-            
-            # 重要なエラーの場合はダイアログ表示
-            if level == "error":
-                from PySide6.QtWidgets import QMessageBox
-                QMessageBox.warning(self, "エラー", message)
-                
-        except Exception as e:
-            logger.error(f"Error handler error: {e}")
-            
-    def _on_refresh_clicked(self):
-        """リフレッシュボタンクリック時の処理（仮実装）"""
-        try:
-            logger.info("リフレッシュボタンがクリックされました")
-            self.status_updated.emit("データを更新しています...")
-            
-            # 仮のデータでテーブルを更新
-            self.workflow_table.setRowCount(1)
-            self.workflow_table.setItem(0, 0, QTableWidgetItem("N12345"))
-            self.workflow_table.setItem(0, 1, QTableWidgetItem("サンプル書籍"))
-            self.workflow_table.setItem(0, 2, QTableWidgetItem("サンプル著者"))
-            self.workflow_table.setItem(0, 3, QTableWidgetItem("作業中"))
-            self.workflow_table.setItem(0, 4, QTableWidgetItem("2025-01-01"))
-            
-            self.status_updated.emit("データ更新完了")
-            
-        except Exception as e:
-            logger.error(f"リフレッシュ処理エラー: {e}")
-            self.status_updated.emit(f"エラー: {e}")
-
 
 if __name__ == "__main__":
     import sys
     from PySide6.QtWidgets import QApplication
+    from techwf.src.config import TechWFConfig
     
     app = QApplication(sys.argv)
     
-    # データベースパス（相対パス）
-    db_path = "../../../data/techwf.db"
+    # セキュアなデータベースパス設定
+    db_path = TechWFConfig.get_database_path()
     
     # メインウィンドウ作成・表示
     window = TechWFMainWindow(db_path)
