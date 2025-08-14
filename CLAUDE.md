@@ -160,3 +160,48 @@ POST /slack/commands/update
 - **CI**: GitHub Actions
 - **Deploy**: Docker + Docker Compose
 - **Environment**: Development, Staging, Production
+
+## 🚨 PJINIT v1.2 リファクタリング計画（2025-08-14）
+
+### 現状と問題点
+PJINIT v1.2の実装には以下の技術的負債が蓄積：
+- **service_adapter.py**: 1200行超の巨大ファイル、複雑な条件分岐
+- **3層クライアント構造**: Mock → Wrapper → Real の過度な抽象化
+- **メソッド同期漏れ**: ラッパークラスと実装クラス間の不整合
+- **Windows/WSL混在**: 実行環境の違いによる複雑性
+
+### リファクタリング方針
+**ブランチ戦略**: `phase2-clean`から新規ブランチ`pjinit-v2-refactor`を作成
+
+### 実装計画
+#### Phase 1: アーキテクチャ再設計（1週目）
+- サービスアダプターパターンの簡素化
+- 単一責任原則に基づくモジュール分割
+- 明確なインターフェース定義
+
+#### Phase 2: コア機能の再実装（2週目）
+- Google Sheets統合
+- Slack API統合（Bot招待含む）
+- GitHub統合
+
+#### Phase 3: Windows環境対応（3週目）
+- グローバルPython環境での動作確認
+- PowerShell実行スクリプトの整備
+- 依存関係管理の明確化
+
+#### Phase 4: テストとドキュメント（4週目）
+- 包括的なテストスイート作成
+- ユーザーマニュアル作成
+- デプロイメントガイド
+
+### 技術的決定事項
+- **実行環境**: Windows PowerShell（グローバルPython）
+- **エントリーポイント**: main.pyに統一
+- **依存関係**: requirements.txtで明示的管理
+- **エラーハンドリング**: 詳細なログ出力と復旧可能な設計
+
+### 成功基準
+- 全機能のテストカバレッジ80%以上
+- service_adapter.pyを300行以下に分割
+- Windows環境での安定動作
+- 明確なエラーメッセージと復旧手順
