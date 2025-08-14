@@ -1,0 +1,48 @@
+health_status:
+  auto_repair_enabled: true
+  config_status:
+    paths: true
+    server: true
+    theme: true
+    ui: true
+  invalid_configs: 0
+  is_healthy: true
+  monitoring_active: true
+  stats:
+    auto_repairs_applied: 0
+    changes_detected: 0
+    configs_loaded: 0
+    last_repair: null
+    last_validation: null
+    validations_performed: 8
+  total_configs: 4
+  valid_configs: 4
+  validation_enabled: true
+recent_changes: []
+system_info:
+  auto_repair_enabled: true
+  generated_at: '2025-08-14T15:33:34.710653'
+  monitoring_active: true
+  project_root: /tmp/techbridge_config_test_nfkfhka4
+  validation_enabled: true
+validation_results:
+  paths:
+    error_count: 0
+    fallback_count: 0
+    is_valid: true
+    warning_count: 0
+  server:
+    error_count: 0
+    fallback_count: 0
+    is_valid: true
+    warning_count: 0
+  theme:
+    error_count: 0
+    fallback_count: 0
+    is_valid: true
+    warning_count: 0
+  ui:
+    error_count: 0
+    fallback_count: 0
+    is_valid: true
+    warning_count: 0

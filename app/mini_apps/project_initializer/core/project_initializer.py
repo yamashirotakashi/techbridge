@@ -60,7 +60,7 @@ class ProjectInitializer:
             'author': project_info.get('author', 'Unknown Author'),
             'repository_name': project_info.get('repository_name', f'book-{n_code.lower()}'),
             'slack_channel': project_info.get('slack_channel', f'#{n_code.lower()}'),
-            'slack_user_id': project_info.get('slack_user_id'),
+            'author_slack_id': project_info.get('author_slack_id'),
             'book_url_from_purchase': project_info.get('book_url_from_purchase'),
             **project_info  # 元の情報を優先
         }
@@ -201,7 +201,7 @@ class ProjectInitializer:
                     progress_callback(f"⚠️ メンバー招待エラー: {member_id} - {str(e)}")
         
         # 著者の招待
-        author_user_id = project_info.get('slack_user_id')
+        author_user_id = project_info.get('author_slack_id')
         if author_user_id:
             try:
                 if progress_callback:

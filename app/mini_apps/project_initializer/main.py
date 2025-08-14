@@ -7,8 +7,23 @@ Ver1.2同等機能復元版
 
 import sys
 import os
-import asyncio
 from pathlib import Path
+
+# CRITICAL: Set up paths BEFORE any other imports to enable GitHub service
+# This must happen before importing any local modules that use service_adapter
+techbridge_root = Path(__file__).parent.parent.parent.parent  # DEV/techbridge
+app_services_path = techbridge_root / "app"                   # DEV/techbridge/app
+
+paths_to_add = [
+    str(techbridge_root),      # /mnt/c/Users/tky99/DEV/techbridge or C:\Users\tky99\DEV\techbridge
+    str(app_services_path),    # /mnt/c/Users/tky99/DEV/techbridge/app or C:\Users\tky99\DEV\techbridge\app
+]
+
+for path in paths_to_add:
+    if path not in sys.path:
+        sys.path.insert(0, path)
+
+import asyncio
 from typing import Optional, Dict, Any
 from datetime import datetime
 import platform
@@ -220,76 +235,29 @@ class WorkerThread(QThread):
                 if not invite_success:
                     self.progress.emit("[WARN] 山城敬の招待に失敗しました")
                 
-                # Bot招待（User Token使用）
-                self.progress.emit("TechZip PDF Botを招待中...")
-                bot_invite_success = await slack_client.invite_user_to_channel(
-                    channel_id,
-                    slack_client.TECHZIP_PDF_BOT_ID,
-                    use_user_token=True  # プライベートチャンネルのためUser Token使用
-                )
+                # Bot招待（PJINIT v1.2方式: 招待Bot A097NKP77EE を使用）
+                self.progress.emit("TechZip PDF Botを招待中（招待Bot使用）...")
+                bot_invite_success = await slack_client.invite_techzip_bot_with_invitation_bot(channel_id)
                 if not bot_invite_success:
-                    self.progress.emit("[WARN] TechZip PDF Botの招待に失敗しました")
+                    self.progress.emit("[WARN] TechZip PDF Botの招待に失敗しました（招待Bot経由）")
                 
-                # GitHub App招待（複数の方法を試行）
-                self.progress.emit("GitHub Appを招待中... (Bot Token優先)")
-                github_app_invite_success = False
-                
-                # 方法1: Bot Token（現在のTechZip Bot）での招待を試行（ChatGPT推奨方式）
-                try:
-                    github_app_invite_success = await slack_client.invite_github_app_with_bot_token(
-                        channel_id
-                    )
-                    if github_app_invite_success:
-                        self.progress.emit("✅ GitHub App招待完了 (Bot Token)")
-                except Exception as e:
-                    self.progress.emit(f"Bot Token招待失敗: {str(e)[:50]}...")
-                
-                # 方法2: Bot Token失敗時、User Tokenでの招待を試行
-                if not github_app_invite_success:
-                    self.progress.emit("User Token招待を試行中...")
-                    try:
-                        github_app_invite_success = await slack_client.invite_user_to_channel(
-                            channel_id,
-                            slack_client.GITHUB_APP_ID,
-                            use_user_token=True
-                        )
-                        if github_app_invite_success:
-                            self.progress.emit("✅ GitHub App招待完了 (User Token)")
-                    except Exception as e:
-                        self.progress.emit(f"User Token招待失敗: {str(e)[:50]}...")
-                
-                # 方法3: 両方失敗時、別Botでの招待を試行
-                if not github_app_invite_success:
-                    self.progress.emit("代替Bot招待を試行中...")
-                    try:
-                        github_app_invite_success = await slack_client.invite_github_app_with_alternative_bot(
-                            channel_id
-                        )
-                        if github_app_invite_success:
-                            self.progress.emit("✅ GitHub App招待完了 (代替Bot)")
-                        else:
-                            self.progress.emit("[WARN] 全ての招待方法が失敗")
-                    except Exception as e:
-                        self.progress.emit(f"代替Bot招待エラー: {str(e)[:30]}...")
-                
-                # 最終結果とGitHub App手動タスクの追加
-                if not github_app_invite_success:
-                    self.progress.emit("[WARN] GitHub App招待失敗 - 手動設定が必要です")
-                    # 手動タスクに追加
-                    result["manual_tasks"].append({
-                        "type": "github_app_invitation",
-                        "repository_name": project_info["repository_name"],
-                        "channel_name": channel_name,
-                        "description": f"GitHub Appを#{channel_name}に設定してください"
-                    })
+                # GitHub App招待は手動作業として扱う
+                self.progress.emit("GitHub App招待は手動タスクに追加...")
+                result["manual_tasks"].append({
+                    "type": "github_app_invitation",
+                    "repository_name": project_info["repository_name"],
+                    "channel_name": channel_name,
+                    "description": f"GitHub Appを#{channel_name}に設定してください"
+                })
+                self.progress.emit("✅ GitHub App招待タスクを手動タスクリストに追加")
                 
                 # 著者の招待処理（エラーハンドリング付き）
-                if project_info.get("slack_user_id"):
+                if project_info.get("author_slack_id"):
                     # 既存ユーザー
                     self.progress.emit("著者を招待中...")
                     author_invite_success = await slack_client.invite_user_to_channel(
                         channel_id,
-                        project_info["slack_user_id"],
+                        project_info["author_slack_id"],
                         use_user_token=True  # プライベートチャンネルのためUser Token使用
                     )
                     if not author_invite_success:
@@ -297,9 +265,9 @@ class WorkerThread(QThread):
                         # 手動タスクとして記録
                         result["manual_tasks"].append({
                             "type": "slack_invitation",
-                            "user_id": project_info["slack_user_id"],
+                            "user_id": project_info["author_slack_id"],
                             "email": project_info.get("author_email", "不明"),
-                            "description": f"著者 {project_info.get('author_email', project_info['slack_user_id'])} をSlackチャンネルに招待してください"
+                            "description": f"著者 {project_info.get('author_email', project_info['author_slack_id'])} をSlackチャンネルに招待してください"
                         })
                 elif project_info.get("author_email"):
                     # メールで検索
@@ -337,7 +305,7 @@ class WorkerThread(QThread):
             self.progress.emit("GitHubリポジトリを作成中...")
             self.progress.emit("yamashirotakashi（編集者）とコラボレーター設定も実行...")
             
-            github_client = GitHubClient(self.params["github_token"])
+            github_client = GitHubClient()
             
             # 書籍名をdescriptionに設定（書籍名がある場合は書籍名のみ）
             book_title = project_info.get("book_title")
@@ -349,7 +317,7 @@ class WorkerThread(QThread):
             repo_info = await github_client.setup_repository(
                 n_code=self.params["n_code"],
                 repo_name=project_info["repository_name"],
-                github_username=project_info.get("github_account"),
+                github_username=project_info.get("author_github_id"),
                 description=description,
                 book_title=book_title
             )
@@ -554,7 +522,7 @@ class ProjectInitializerWindow(QMainWindow):
         return widget
     
     def _create_settings_tab(self):
-        """設定タブを作成"""
+        """設定タブを作成 - 全トークン対応版"""
         widget = QWidget()
         layout = QVBoxLayout(widget)
         
@@ -562,29 +530,81 @@ class ProjectInitializerWindow(QMainWindow):
         api_group = QGroupBox("API設定")
         api_layout = QGridLayout()
         
-        # Slack Token
+        # Slack Bot Token
         api_layout.addWidget(QLabel("Slack Bot Token:"), 0, 0)
         self.slack_token_input = QLineEdit()
-        self.slack_token_input.setEchoMode(QLineEdit.EchoMode.Password)
+        self.slack_token_input.setPlaceholderText("xoxb-... (メインBot)")
         api_layout.addWidget(self.slack_token_input, 0, 1)
         
+        # Slack User Token
+        api_layout.addWidget(QLabel("Slack User Token:"), 1, 0)
+        self.slack_user_token_input = QLineEdit()
+        self.slack_user_token_input.setPlaceholderText("xoxp-... (プライベートチャンネル用)")
+        api_layout.addWidget(self.slack_user_token_input, 1, 1)
+        
+        # Slack Invitation Bot Token (招待Bot専用)
+        api_layout.addWidget(QLabel("Slack Invitation Bot Token:"), 2, 0)
+        self.slack_invitation_token_input = QLineEdit()
+        self.slack_invitation_token_input.setPlaceholderText("xoxb-... (招待Bot用)")
+        api_layout.addWidget(self.slack_invitation_token_input, 2, 1)
+        
         # GitHub Token
-        api_layout.addWidget(QLabel("GitHub Token:"), 1, 0)
+        api_layout.addWidget(QLabel("GitHub Token:"), 3, 0)
         self.github_token_input = QLineEdit()
-        self.github_token_input.setEchoMode(QLineEdit.EchoMode.Password)
-        api_layout.addWidget(self.github_token_input, 1, 1)
+        self.github_token_input.setPlaceholderText("ghp_... (個人用)")
+        api_layout.addWidget(self.github_token_input, 3, 1)
         
-        # Google Sheets ID
-        api_layout.addWidget(QLabel("発行計画シートID:"), 2, 0)
-        self.planning_sheet_input = QLineEdit()
-        api_layout.addWidget(self.planning_sheet_input, 2, 1)
+        # GitHub Org Token
+        api_layout.addWidget(QLabel("GitHub Org Token:"), 4, 0)
+        self.github_org_token_input = QLineEdit()
+        self.github_org_token_input.setPlaceholderText("ghp_... (組織用)")
+        api_layout.addWidget(self.github_org_token_input, 4, 1)
         
-        api_layout.addWidget(QLabel("購入リストシートID:"), 3, 0)
-        self.purchase_sheet_input = QLineEdit()
-        api_layout.addWidget(self.purchase_sheet_input, 3, 1)
+        # Slack Signing Secret
+        api_layout.addWidget(QLabel("Slack Signing Secret:"), 5, 0)
+        self.slack_signing_secret_input = QLineEdit()
+        self.slack_signing_secret_input.setPlaceholderText("Slack App署名シークレット")
+        api_layout.addWidget(self.slack_signing_secret_input, 5, 1)
+        
+        # Slack Client ID
+        api_layout.addWidget(QLabel("Slack Client ID:"), 6, 0)
+        self.slack_client_id_input = QLineEdit()
+        self.slack_client_id_input.setPlaceholderText("Slack App クライアントID")
+        api_layout.addWidget(self.slack_client_id_input, 6, 1)
+        
+        # Slack Client Secret
+        api_layout.addWidget(QLabel("Slack Client Secret:"), 7, 0)
+        self.slack_client_secret_input = QLineEdit()
+        self.slack_client_secret_input.setPlaceholderText("Slack App クライアントシークレット")
+        api_layout.addWidget(self.slack_client_secret_input, 7, 1)
+        
+        # Google Service Account Key
+        api_layout.addWidget(QLabel("Google Service Key:"), 8, 0)
+        self.google_service_key_input = QLineEdit()
+        self.google_service_key_input.setPlaceholderText("Google サービスアカウントキーのパス")
+        api_layout.addWidget(self.google_service_key_input, 8, 1)
         
         api_group.setLayout(api_layout)
         layout.addWidget(api_group)
+        
+        # Google Sheets設定
+        sheets_group = QGroupBox("Google Sheets設定")
+        sheets_layout = QGridLayout()
+        
+        # 発行計画シートID
+        sheets_layout.addWidget(QLabel("発行計画シートID:"), 0, 0)
+        self.planning_sheet_input = QLineEdit()
+        self.planning_sheet_input.setPlaceholderText("17DKsMGQ6...")
+        sheets_layout.addWidget(self.planning_sheet_input, 0, 1)
+        
+        # 購入リストシートID
+        sheets_layout.addWidget(QLabel("購入リストシートID:"), 1, 0)
+        self.purchase_sheet_input = QLineEdit()
+        self.purchase_sheet_input.setPlaceholderText("1JJ_C3z0...")
+        sheets_layout.addWidget(self.purchase_sheet_input, 1, 1)
+        
+        sheets_group.setLayout(sheets_layout)
+        layout.addWidget(sheets_group)
         
         # 保存ボタン
         save_button = QPushButton("設定を保存")
@@ -614,16 +634,62 @@ class ProjectInitializerWindow(QMainWindow):
         help_menu.addAction(about_action)
     
     def load_settings(self):
-        """設定を読み込み"""
-        # 環境変数から読み込み
+        """設定を読み込み - 全トークン対応版"""
+        # Slack関連トークン
         self.slack_token_input.setText(os.getenv("SLACK_BOT_TOKEN", ""))
-        self.github_token_input.setText(os.getenv("GITHUB_ORG_TOKEN", ""))
+        self.slack_user_token_input.setText(os.getenv("SLACK_USER_TOKEN", ""))
+        self.slack_invitation_token_input.setText(os.getenv("SLACK_INVITATION_BOT_TOKEN", ""))
+        self.slack_signing_secret_input.setText(os.getenv("SLACK_SIGNING_SECRET", ""))
+        self.slack_client_id_input.setText(os.getenv("SLACK_CLIENT_ID", ""))
+        self.slack_client_secret_input.setText(os.getenv("SLACK_CLIENT_SECRET", ""))
+        
+        # GitHub関連トークン
+        self.github_token_input.setText(os.getenv("GITHUB_TOKEN", ""))
+        self.github_org_token_input.setText(os.getenv("GITHUB_ORG_TOKEN", ""))
+        
+        # Google Service Key
+        self.google_service_key_input.setText(os.getenv("GOOGLE_SERVICE_ACCOUNT_KEY", ""))
+        
+        # Google Sheets ID（デフォルト値設定）
         self.planning_sheet_input.setText("17DKsMGQ6krbhY7GIcX0iaeN-y8HcGGVkXt3d4oOckyQ")
         self.purchase_sheet_input.setText("1JJ_C3z0txlJWiyEDl0c6OoVD5Ym_IoZJMMf5o76oV4c")
     
     def save_settings(self):
-        """設定を保存"""
-        QMessageBox.information(self, "設定保存", "設定を保存しました")
+        """設定を保存 - 実際の保存機能実装"""
+        try:
+            # 設定値を収集
+            settings = {
+                'SLACK_BOT_TOKEN': self.slack_token_input.text(),
+                'SLACK_USER_TOKEN': self.slack_user_token_input.text(),
+                'SLACK_INVITATION_BOT_TOKEN': self.slack_invitation_token_input.text(),
+                'SLACK_SIGNING_SECRET': self.slack_signing_secret_input.text(),
+                'SLACK_CLIENT_ID': self.slack_client_id_input.text(),
+                'SLACK_CLIENT_SECRET': self.slack_client_secret_input.text(),
+                'GITHUB_TOKEN': self.github_token_input.text(),
+                'GITHUB_ORG_TOKEN': self.github_org_token_input.text(),
+                'GOOGLE_SERVICE_ACCOUNT_KEY': self.google_service_key_input.text(),
+                'PLANNING_SHEET_ID': self.planning_sheet_input.text(),
+                'PURCHASE_SHEET_ID': self.purchase_sheet_input.text()
+            }
+            
+            # 空でない値のみを環境変数に設定
+            for key, value in settings.items():
+                if value.strip():
+                    os.environ[key] = value.strip()
+            
+            # 設定ファイルに保存（オプション）
+            # config_dir = Path.home() / '.pjinit'
+            # config_dir.mkdir(exist_ok=True)
+            # config_file = config_dir / 'settings.json'
+            # with open(config_file, 'w', encoding='utf-8') as f:
+            #     json.dump({k: v for k, v in settings.items() if v.strip()}, f, indent=2)
+            
+            QMessageBox.information(self, "設定保存", 
+                                  f"設定を保存しました\n"
+                                  f"保存された項目: {sum(1 for v in settings.values() if v.strip())}個")
+                                  
+        except Exception as e:
+            QMessageBox.critical(self, "保存エラー", f"設定の保存に失敗しました:\n{str(e)}")
     
     def check_project_info(self):
         """プロジェクト情報を確認"""
@@ -666,8 +732,8 @@ Nコード: {result['n_code']}
 
 【著者情報】
 著者メール: {result.get('author_email', 'なし')}
-GitHub: {result.get('github_account', 'なし')}
-Slack ID: {result.get('slack_user_id', 'なし')}
+GitHub ID: {result.get('author_github_id', 'なし')}
+Slack ID: {result.get('author_slack_id', 'なし')}
 
 【その他】
 書籍URL（購入リスト）: {result.get('book_url_from_purchase', 'なし')}
@@ -690,13 +756,20 @@ Slack ID: {result.get('slack_user_id', 'なし')}
         if reply != QMessageBox.StandardButton.Yes:
             return
         
-        # パラメータ準備
+        # パラメータ準備 - 全トークン対応版
         params = {
             "n_code": self.n_code_input.text(),
             "planning_sheet_id": self.planning_sheet_input.text(),
             "purchase_sheet_id": self.purchase_sheet_input.text(),
             "slack_token": self.slack_token_input.text(),
+            "slack_user_token": self.slack_user_token_input.text(),
+            "slack_invitation_token": self.slack_invitation_token_input.text(),
+            "slack_signing_secret": self.slack_signing_secret_input.text(),
+            "slack_client_id": self.slack_client_id_input.text(),
+            "slack_client_secret": self.slack_client_secret_input.text(),
             "github_token": self.github_token_input.text(),
+            "github_org_token": self.github_org_token_input.text(),
+            "google_service_key": self.google_service_key_input.text(),
             "create_slack_channel": self.create_slack_cb.isChecked(),
             "create_github_repo": self.create_github_cb.isChecked(),
             "update_sheets": self.update_sheets_cb.isChecked()
@@ -793,8 +866,50 @@ Slack ID: {result.get('slack_user_id', 'なし')}
         )
 
 
+async def process_n_code_cli(n_code: str):
+    """CLI版のN-code処理"""
+    print(f"\n=== N-CODE PROCESSING: {n_code} ===")
+    
+    try:
+        # ServiceAdapterを使用してプロジェクト情報を取得
+        from clients.service_adapter import create_service_adapter
+        adapter = create_service_adapter()
+        
+        # プロジェクト情報取得
+        print(f"[INFO] Searching for project info: {n_code}")
+        project_info = await adapter.get_project_info(n_code)
+        
+        if project_info:
+            print(f"[SUCCESS] Found project information:")
+            print(f"  N-Code: {project_info['n_code']}")
+            print(f"  Repository: {project_info['repository_name']}")
+            print(f"  Channel: {project_info['channel_name']}")
+            print(f"  Book Title: {project_info.get('book_title', 'N/A')}")
+            print(f"  Author Slack ID: {project_info.get('author_slack_id', 'N/A')}")
+            print(f"  Author GitHub ID: {project_info.get('author_github_id', 'N/A')}")
+            print(f"  Author Email: {project_info.get('author_email', 'N/A')}")
+            print(f"  Sheet: {project_info.get('sheet_name', 'N/A')}")
+            
+            # 購入リストから書籍URL取得を試行
+            if adapter.google_sheets:
+                print(f"\n[INFO] Checking book URL from purchase list...")
+                book_url = adapter.google_sheets.get_book_url_from_purchase_list(n_code)
+                if book_url:
+                    print(f"  Book URL: {book_url}")
+                else:
+                    print(f"  Book URL: Not found in purchase list")
+            
+            return True
+        else:
+            print(f"[ERROR] N-code {n_code} not found in main sheet")
+            return False
+            
+    except Exception as e:
+        print(f"[ERROR] Failed to process N-code {n_code}: {e}")
+        return False
+
 def run_cli_mode():
-    """CLIモードで実行"""
+    """CLIモードで実行 - コマンドライン引数対応"""
     print("=== PJINIT - Project Initializer CLI Mode ===")
     print("技術の泉シリーズプロジェクト初期化ツール v1.2")
     print("WSL環境のためCLIモードで動作しています。")
@@ -804,6 +919,29 @@ def run_cli_mode():
     print("- 技術の泉シリーズ専用ワークフロー")
     print("\nGUIモードを使用するにはWindows環境で実行してください。")
     
+    # コマンドライン引数をチェック
+    if len(sys.argv) > 1:
+        n_code = sys.argv[1].upper()
+        if n_code.startswith('N') and len(n_code) >= 5:
+            print(f"\n[INFO] Processing N-code from command line: {n_code}")
+            
+            # 非同期処理を実行
+            try:
+                result = asyncio.run(process_n_code_cli(n_code))
+                if result:
+                    print(f"\n[SUCCESS] N-code {n_code} processing completed!")
+                else:
+                    print(f"\n[ERROR] N-code {n_code} processing failed!")
+            except Exception as e:
+                print(f"\n[ERROR] Async processing failed: {e}")
+                
+            print("\n終了します。")
+            return
+        else:
+            print(f"\n[ERROR] Invalid N-code format: {n_code}")
+            print("N-code should start with 'N' and be at least 5 characters long (e.g., N02359)")
+    
+    # インタラクティブモード
     try:
         input("\nEnterキーで終了...")
     except EOFError:

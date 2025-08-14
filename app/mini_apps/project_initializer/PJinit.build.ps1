@@ -43,10 +43,11 @@ if (!(Test-Path "config")) {
     New-Item -ItemType Directory -Path "config" | Out-Null
 }
 
-# PyInstaller実行
+# PyInstaller実行（グローバルPython環境を使用）
 Write-Host "PyInstaller 実行中..." -ForegroundColor Cyan
+Write-Host "Using global Python environment (no venv)" -ForegroundColor Yellow
 
-$BuildCommand = "pyinstaller --onefile --windowed --name=PJinit --distpath=dist --workpath=build --specpath=. main.py"
+$BuildCommand = "python -m PyInstaller --onefile --windowed --name=PJinit --distpath=dist --workpath=build --specpath=. main.py"
 Invoke-Expression $BuildCommand
 
 if ($LASTEXITCODE -eq 0) {

@@ -150,26 +150,64 @@ class ProjectInitializerWindow(QMainWindow):
         api_group = QGroupBox("API設定")
         api_layout = QGridLayout()
         
-        # Slack Token
+        # Slack Bot Token
         api_layout.addWidget(QLabel("Slack Bot Token:"), 0, 0)
         self.slack_token_input = QLineEdit()
-        self.slack_token_input.setEchoMode(QLineEdit.EchoMode.Password)
+        # Remove password masking as requested by user
+        # self.slack_token_input.setEchoMode(QLineEdit.EchoMode.Password)
         api_layout.addWidget(self.slack_token_input, 0, 1)
         
+        # Slack User Token (new)
+        api_layout.addWidget(QLabel("Slack User Token:"), 1, 0)
+        self.slack_user_token_input = QLineEdit()
+        self.slack_user_token_input.setPlaceholderText("xoxp-... (プライベートチャンネル作成用)")
+        api_layout.addWidget(self.slack_user_token_input, 1, 1)
+        
+        # Slack Invitation Bot Token (招待Bot専用)
+        api_layout.addWidget(QLabel("Slack Invitation Bot Token:"), 2, 0)
+        self.slack_invitation_token_input = QLineEdit()
+        self.slack_invitation_token_input.setPlaceholderText("xoxb-... (招待Bot用)")
+        api_layout.addWidget(self.slack_invitation_token_input, 2, 1)
+        
         # GitHub Token
-        api_layout.addWidget(QLabel("GitHub Token:"), 1, 0)
+        api_layout.addWidget(QLabel("GitHub Token:"), 3, 0)
         self.github_token_input = QLineEdit()
-        self.github_token_input.setEchoMode(QLineEdit.EchoMode.Password)
-        api_layout.addWidget(self.github_token_input, 1, 1)
+        api_layout.addWidget(self.github_token_input, 3, 1)
+        
+        # GitHub Organization Token
+        api_layout.addWidget(QLabel("GitHub Org Token:"), 4, 0)
+        self.github_org_token_input = QLineEdit()
+        self.github_org_token_input.setPlaceholderText("ghp-... (組織用トークン)")
+        api_layout.addWidget(self.github_org_token_input, 4, 1)
+        
+        # Slack Signing Secret
+        api_layout.addWidget(QLabel("Slack Signing Secret:"), 5, 0)
+        self.slack_signing_secret_input = QLineEdit()
+        api_layout.addWidget(self.slack_signing_secret_input, 5, 1)
+        
+        # Slack Client ID & Secret
+        api_layout.addWidget(QLabel("Slack Client ID:"), 6, 0)
+        self.slack_client_id_input = QLineEdit()
+        api_layout.addWidget(self.slack_client_id_input, 6, 1)
+        
+        api_layout.addWidget(QLabel("Slack Client Secret:"), 7, 0)
+        self.slack_client_secret_input = QLineEdit()
+        api_layout.addWidget(self.slack_client_secret_input, 7, 1)
+        
+        # Google Service Account Key Path
+        api_layout.addWidget(QLabel("Google Service Account Key:"), 8, 0)
+        self.google_service_key_input = QLineEdit()
+        self.google_service_key_input.setPlaceholderText("Path to service account JSON file")
+        api_layout.addWidget(self.google_service_key_input, 8, 1)
         
         # Google Sheets ID
-        api_layout.addWidget(QLabel("発行計画シートID:"), 2, 0)
+        api_layout.addWidget(QLabel("発行計画シートID:"), 9, 0)
         self.planning_sheet_input = QLineEdit()
-        api_layout.addWidget(self.planning_sheet_input, 2, 1)
+        api_layout.addWidget(self.planning_sheet_input, 9, 1)
         
-        api_layout.addWidget(QLabel("購入リストシートID:"), 3, 0)
+        api_layout.addWidget(QLabel("購入リストシートID:"), 10, 0)
         self.purchase_sheet_input = QLineEdit()
-        api_layout.addWidget(self.purchase_sheet_input, 3, 1)
+        api_layout.addWidget(self.purchase_sheet_input, 10, 1)
         
         api_group.setLayout(api_layout)
         layout.addWidget(api_group)
@@ -205,7 +243,14 @@ class ProjectInitializerWindow(QMainWindow):
         """設定を読み込み"""
         # 環境変数から読み込み
         self.slack_token_input.setText(os.getenv("SLACK_BOT_TOKEN", ""))
-        self.github_token_input.setText(os.getenv("GITHUB_ORG_TOKEN", ""))
+        self.slack_user_token_input.setText(os.getenv("SLACK_USER_TOKEN", ""))
+        self.slack_invitation_token_input.setText(os.getenv("SLACK_INVITATION_BOT_TOKEN", ""))
+        self.github_token_input.setText(os.getenv("GITHUB_TOKEN", ""))
+        self.github_org_token_input.setText(os.getenv("GITHUB_ORG_TOKEN", ""))
+        self.slack_signing_secret_input.setText(os.getenv("SLACK_SIGNING_SECRET", ""))
+        self.slack_client_id_input.setText(os.getenv("SLACK_CLIENT_ID", ""))
+        self.slack_client_secret_input.setText(os.getenv("SLACK_CLIENT_SECRET", ""))
+        self.google_service_key_input.setText(os.getenv("GOOGLE_SERVICE_ACCOUNT_KEY", ""))
         self.planning_sheet_input.setText("17DKsMGQ6krbhY7GIcX0iaeN-y8HcGGVkXt3d4oOckyQ")
         self.purchase_sheet_input.setText("1JJ_C3z0txlJWiyEDl0c6OoVD5Ym_IoZJMMf5o76oV4c")
     
@@ -228,7 +273,14 @@ class ProjectInitializerWindow(QMainWindow):
         """設定保存のUIイベントハンドラ"""
         settings = {
             'slack_token': self.slack_token_input.text(),
+            'slack_user_token': self.slack_user_token_input.text(),
+            'slack_invitation_token': self.slack_invitation_token_input.text(),
             'github_token': self.github_token_input.text(),
+            'github_org_token': self.github_org_token_input.text(),
+            'slack_signing_secret': self.slack_signing_secret_input.text(),
+            'slack_client_id': self.slack_client_id_input.text(),
+            'slack_client_secret': self.slack_client_secret_input.text(),
+            'google_service_key': self.google_service_key_input.text(),
             'planning_sheet_id': self.planning_sheet_input.text(),
             'purchase_sheet_id': self.purchase_sheet_input.text()
         }
@@ -243,7 +295,14 @@ class ProjectInitializerWindow(QMainWindow):
             'create_github_repo': self.create_github_cb.isChecked(),
             'update_google_sheets': self.update_sheets_cb.isChecked(),
             'slack_token': self.slack_token_input.text(),
+            'slack_user_token': self.slack_user_token_input.text(),
+            'slack_invitation_token': self.slack_invitation_token_input.text(),
             'github_token': self.github_token_input.text(),
+            'github_org_token': self.github_org_token_input.text(),
+            'slack_signing_secret': self.slack_signing_secret_input.text(),
+            'slack_client_id': self.slack_client_id_input.text(),
+            'slack_client_secret': self.slack_client_secret_input.text(),
+            'google_service_key': self.google_service_key_input.text(),
             'planning_sheet_id': self.planning_sheet_input.text(),
             'purchase_sheet_id': self.purchase_sheet_input.text()
         }

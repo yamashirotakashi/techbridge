@@ -228,6 +228,20 @@ class GoogleSheetsService:
             logger.error("Failed to write cell", n_code=n_code, column=column, row=row, value=value, error=str(e))
             return False
     
+    def get_book_url_from_purchase_list(self, n_code: str) -> Optional[str]:
+        """購入リストからBook URLを取得"""
+        try:
+            project_info = self.search_n_code(n_code)
+            if project_info and 'book_url' in project_info:
+                logger.info("Book URL found", n_code=n_code, url=project_info['book_url'])
+                return project_info['book_url']
+            
+            logger.warning("Book URL not found for N-code", n_code=n_code)
+            return None
+        except Exception as e:
+            logger.error("Failed to get book URL from purchase list", error=str(e), n_code=n_code)
+            return None
+    
     def test_read_write(self, n_code: str, test_value: str = "test_write", column: str = 'G') -> Dict[str, Any]:
         """読み書きテストを実行"""
         logger.info("Starting read-write test", n_code=n_code, test_value=test_value, column=column)
