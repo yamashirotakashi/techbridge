@@ -534,7 +534,7 @@ class UIBuilder:
     
     def _create_init_tab_new(self):
         """
-        [Phase1移行対象] プロジェクト初期化タブを作成
+        [Phase1移行完了] プロジェクト初期化タブを作成
         
         既存 _create_init_tab の完全移行版
         制約遵守: レイアウト・動作100%同一
@@ -544,16 +544,16 @@ class UIBuilder:
         tab = QWidget()
         layout = QVBoxLayout(tab)
         
-        # プロジェクト情報入力セクション (委譲)
+        # プロジェクト情報入力セクション (既存メソッド委譲)
         layout.addWidget(self.parent._create_project_info_input_section())
         
-        # プロジェクト情報表示セクション (委譲)
+        # プロジェクト情報表示セクション (既存メソッド委譲)
         layout.addWidget(self.parent._create_project_info_display_section())
         
-        # 実行オプションセクション (委譲)
+        # 実行オプションセクション (既存メソッド委譲)
         layout.addWidget(self.parent._create_execution_options_section())
         
-        # 実行ログセクション (委譲)
+        # 実行ログセクション (既存メソッド委譲)
         layout.addWidget(self.parent._create_execution_log_section())
         
         return tab
