@@ -98,67 +98,53 @@ def is_service_available(service_name: str) -> bool:
     return False
 
 
+# ServiceAdapter キャッシュインスタンス (HIGH問題解決: 重複インスタンス化防止)
+_service_adapter_cache = None
+
+def _get_cached_service_adapter():
+    """ServiceAdapterの共有インスタンスを取得（キャッシュ機構）"""
+    global _service_adapter_cache
+    if _service_adapter_cache is None:
+        try:
+            # 絶対インポート（相対インポート問題の回避）
+            try:
+                from clients.service_adapter import ServiceAdapter
+            except ImportError:
+                # パスを追加してリトライ
+                import sys
+                from pathlib import Path
+                current_dir = Path(__file__).parent.parent
+                if str(current_dir) not in sys.path:
+                    sys.path.insert(0, str(current_dir))
+                from clients.service_adapter import ServiceAdapter
+            
+            _service_adapter_cache = ServiceAdapter()
+        except ImportError:
+            return None
+    return _service_adapter_cache
+
 def _check_google_sheets() -> bool:
     """Google Sheets連携の利用可能性"""
-    try:
-        # 絶対インポート（相対インポート問題の回避）
-        try:
-            from clients.service_adapter import ServiceAdapter
-        except ImportError:
-            # パスを追加してリトライ
-            import sys
-            from pathlib import Path
-            current_dir = Path(__file__).parent.parent
-            if str(current_dir) not in sys.path:
-                sys.path.insert(0, str(current_dir))
-            from clients.service_adapter import ServiceAdapter
-            
-        adapter = ServiceAdapter()
-        return adapter.is_available('google_sheets')
-    except ImportError:
+    adapter = _get_cached_service_adapter()
+    if adapter is None:
         return False
+    return adapter.is_available('google_sheets')
 
 
 def _check_slack() -> bool:
     """Slack連携の利用可能性"""
-    try:
-        # 絶対インポート（相対インポート問題の回避）
-        try:
-            from clients.service_adapter import ServiceAdapter
-        except ImportError:
-            # パスを追加してリトライ
-            import sys
-            from pathlib import Path
-            current_dir = Path(__file__).parent.parent
-            if str(current_dir) not in sys.path:
-                sys.path.insert(0, str(current_dir))
-            from clients.service_adapter import ServiceAdapter
-            
-        adapter = ServiceAdapter()
-        return adapter.is_available('slack')
-    except ImportError:
+    adapter = _get_cached_service_adapter()
+    if adapter is None:
         return False
+    return adapter.is_available('slack')
 
 
 def _check_github() -> bool:
     """GitHub連携の利用可能性"""
-    try:
-        # 絶対インポート（相対インポート問題の回避）
-        try:
-            from clients.service_adapter import ServiceAdapter
-        except ImportError:
-            # パスを追加してリトライ
-            import sys
-            from pathlib import Path
-            current_dir = Path(__file__).parent.parent
-            if str(current_dir) not in sys.path:
-                sys.path.insert(0, str(current_dir))
-            from clients.service_adapter import ServiceAdapter
-            
-        adapter = ServiceAdapter()
-        return adapter.is_available('github')
-    except ImportError:
+    adapter = _get_cached_service_adapter()
+    if adapter is None:
         return False
+    return adapter.is_available('github')
 
 
 def get_environment_info() -> dict:

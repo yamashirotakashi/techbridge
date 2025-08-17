@@ -86,8 +86,93 @@ def run_gui():
         return run_cli()
 
 
+def validate_n_code(n_code: str) -> bool:
+    """
+    N-codeの形式を検証
+    セキュリティ改善: 入力検証によるインジェクション攻撃防止
+    
+    Args:
+        n_code: 検証対象のN-code文字列
+        
+    Returns:
+        bool: 有効な形式の場合True
+    """
+    import re
+    if not n_code or not isinstance(n_code, str):
+        return False
+    
+    # N-code形式: N + 4-6桁の数字
+    pattern = r'^N\d{4,6}$'
+    normalized_code = n_code.strip().upper()
+    return bool(re.match(pattern, normalized_code))
+
+
+def validate_menu_choice(choice: str, min_val: int, max_val: int) -> bool:
+    """
+    メニュー選択肢の範囲を検証
+    セキュリティ改善: 不正な入力による予期しない動作の防止
+    
+    Args:
+        choice: 検証対象の選択肢文字列
+        min_val: 最小値
+        max_val: 最大値
+        
+    Returns:
+        bool: 有効な範囲の場合True
+    """
+    if not choice or not isinstance(choice, str):
+        return False
+    
+    try:
+        value = int(choice.strip())
+        return min_val <= value <= max_val
+    except (ValueError, TypeError):
+        return False
+
+
+def secure_input(prompt: str, validator_func=None, max_attempts: int = 3) -> str:
+    """
+    セキュアな入力取得関数
+    セキュリティ改善: 入力検証とリトライ制限による安全性向上
+    
+    Args:
+        prompt: 入力プロンプト
+        validator_func: 検証関数（オプション）
+        max_attempts: 最大試行回数
+        
+    Returns:
+        str: 検証済みの入力値
+        
+    Raises:
+        ValueError: 最大試行回数を超えた場合
+    """
+    for attempt in range(max_attempts):
+        try:
+            user_input = input(prompt).strip()
+            
+            # 基本的なサニタイゼーション
+            if len(user_input) > 100:  # 異常に長い入力を拒否
+                safe_print(f"❌ 入力が長すぎます（最大100文字）")
+                continue
+            
+            # カスタム検証関数がある場合は実行
+            if validator_func and not validator_func(user_input):
+                safe_print(f"❌ 無効な入力です。再試行してください。")
+                continue
+                
+            return user_input
+            
+        except (EOFError, KeyboardInterrupt):
+            safe_print("\n⚠️  入力がキャンセルされました")
+            raise ValueError("入力がキャンセルされました")
+        except Exception as e:
+            safe_print(f"❌ 入力エラー: {e}")
+            continue
+    
+    raise ValueError(f"最大試行回数（{max_attempts}回）を超えました")
+
 def run_cli():
-    """CLI版を実行"""
+    """CLI版を実行（セキュリティ強化版）"""
     safe_print("=== PJINIT CLI版 ===")
     try:
         # 動的インポート（直接パス指定）
@@ -106,44 +191,70 @@ def run_cli():
         # プロジェクト初期化ツールの起動
         initializer = ProjectInitializer()
         
-        # インタラクティブモード
+        # インタラクティブモード（セキュリティ強化版）
         while True:
             safe_print("\n--- メニュー ---")
             safe_print("1. プロジェクト情報確認")
             safe_print("2. プロジェクト初期化")
             safe_print("3. 終了")
             
-            choice = input("選択してください (1-3): ").strip()
-            
-            if choice == "1":
-                n_code = input("N-code を入力してください: ").strip()
-                if n_code:
-                    safe_print(f"プロジェクト情報を確認中: {n_code}")
+            try:
+                # セキュア入力: メニュー選択の検証
+                choice = secure_input(
+                    "選択してください (1-3): ",
+                    lambda x: validate_menu_choice(x, 1, 3),
+                    max_attempts=3
+                )
+                
+                if choice == "1":
                     try:
-                        loop = asyncio.new_event_loop()
-                        asyncio.set_event_loop(loop)
-                        project_info = loop.run_until_complete(initializer.fetch_project_info(n_code))
+                        # セキュア入力: N-code形式の検証
+                        n_code = secure_input(
+                            "N-code を入力してください (例: N12345): ",
+                            validate_n_code,
+                            max_attempts=3
+                        )
                         
-                        if project_info:
-                            safe_print("✅ プロジェクト情報を取得しました:")
-                            for key, value in project_info.items():
-                                safe_print(f"  {key}: {value}")
-                        else:
-                            safe_print("❌ プロジェクト情報が見つかりませんでした")
-                    except Exception as e:
-                        safe_print(f"❌ エラー: {e}")
-                    finally:
-                        loop.close()
-            
-            elif choice == "2":
-                safe_print("プロジェクト初期化機能は実装準備中です")
-            
-            elif choice == "3":
-                safe_print("終了します")
+                        if n_code:
+                            safe_print(f"プロジェクト情報を確認中: {n_code}")
+                            try:
+                                loop = asyncio.new_event_loop()
+                                asyncio.set_event_loop(loop)
+                                project_info = loop.run_until_complete(initializer.fetch_project_info(n_code))
+                                
+                                if project_info:
+                                    safe_print("✅ プロジェクト情報を取得しました:")
+                                    for key, value in project_info.items():
+                                        safe_print(f"  {key}: {value}")
+                                else:
+                                    safe_print("❌ プロジェクト情報が見つかりませんでした")
+                            except Exception as e:
+                                safe_print(f"❌ エラー: {e}")
+                            finally:
+                                loop.close()
+                                
+                    except ValueError as e:
+                        safe_print(f"❌ 入力エラー: {e}")
+                        safe_print("メニューに戻ります...")
+                        continue
+                
+                elif choice == "2":
+                    safe_print("プロジェクト初期化機能は実装準備中です")
+                
+                elif choice == "3":
+                    safe_print("終了します")
+                    break
+                
+                else:
+                    safe_print("❌ 無効な選択です")
+                    
+            except ValueError as e:
+                safe_print(f"❌ 入力エラー: {e}")
+                safe_print("メニューに戻ります...")
+                continue
+            except (EOFError, KeyboardInterrupt):
+                safe_print("\n⚠️  プログラムを終了します")
                 break
-            
-            else:
-                safe_print("❌ 無効な選択です")
         
         return 0
         

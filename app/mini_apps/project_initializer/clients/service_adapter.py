@@ -21,6 +21,8 @@ except ImportError:
     logger = SimpleLogger()
 
 # TechBridgeサービス層への正しいパスを設定
+# Services imports
+from .services import GitHubService, SlackService, SheetsService, ServiceUtils
 techbridge_root = Path(__file__).parent.parent.parent.parent  # DEV/techbridge
 app_services_path = techbridge_root / "app"                   # DEV/techbridge/app
 
@@ -150,14 +152,14 @@ class RealSlackService:
             print(f"[ERROR] Slack channel creation failed: {e}")
             return None
     
-    async def invite_user(self, channel_id: str, user_id: str):
+    async def invite_user(self, channel_id: str, user_email: str):
         """Invite user using real Slack API"""
         if not self.client:
             print(f"[ERROR] Real Slack client not available")
             return False
             
         try:
-            return await self.client.invite_user_to_channel(channel_id, user_id)
+            return await self.client.invite_user_to_channel(channel_id, user_email)
         except Exception as e:
             print(f"[ERROR] Slack user invitation failed: {e}")
             return False
@@ -706,9 +708,15 @@ class ServiceAdapter:
     """
     
     def __init__(self):
+        # Legacy service instances (deprecated)
         self.google_sheets = None
-        self.slack_service = None
+        self.slack_service = None  
         self.github_client = None
+        
+        # New service layer instances
+        self.github_service = None
+        self.slack_service_new = None
+        self.sheets_service = None
         
         if SERVICES_AVAILABLE:
             self._initialize_services()
@@ -716,20 +724,44 @@ class ServiceAdapter:
     def _initialize_services(self):
         """サービスの初期化"""
         try:
-            # Google Sheets Service
+            # Legacy services (backwards compatibility)
             if hasattr(settings, 'GOOGLE_SHEETS_ID') and settings.GOOGLE_SHEETS_ID:
                 self.google_sheets = GoogleSheetsService()
-                print("[OK] Google Sheets Service initialized")
+                print("[OK] Legacy Google Sheets Service initialized")
                 
-            # Slack Service  
             if hasattr(settings, 'SLACK_BOT_TOKEN') and settings.SLACK_BOT_TOKEN:
                 self.slack_service = SlackService()
-                print("[OK] Slack Service initialized")
+                print("[OK] Legacy Slack Service initialized")
                 
-            # GitHub Service
             if hasattr(settings, 'GITHUB_TOKEN') and settings.GITHUB_TOKEN:
                 self.github_client = GitHubService()
-                print("[OK] GitHub Service initialized")
+                print("[OK] Legacy GitHub Service initialized")
+            
+            # New service layer instances
+            # GitHub Service
+            if hasattr(settings, 'GITHUB_TOKEN') and settings.GITHUB_TOKEN:
+                self.github_service = GitHubService(settings.GITHUB_TOKEN)
+                print("[OK] GitHubService initialized")
+            
+            # Slack Service  
+            if (hasattr(settings, 'SLACK_BOT_TOKEN') and settings.SLACK_BOT_TOKEN and
+                hasattr(settings, 'SLACK_USER_TOKEN') and settings.SLACK_USER_TOKEN):
+                alternative_bot = getattr(settings, 'SLACK_ALTERNATIVE_BOT_TOKEN', None)
+                self.slack_service_new = SlackService(
+                    settings.SLACK_USER_TOKEN,
+                    settings.SLACK_BOT_TOKEN, 
+                    alternative_bot
+                )
+                print("[OK] SlackService initialized")
+            
+            # Sheets Service
+            if hasattr(settings, 'GOOGLE_SHEETS_ID') and settings.GOOGLE_SHEETS_ID:
+                service_account_key = getattr(settings, 'GOOGLE_SERVICE_ACCOUNT_KEY', None)
+                self.sheets_service = SheetsService(
+                    service_account_key,
+                    settings.GOOGLE_SHEETS_ID
+                )
+                print("[OK] SheetsService initialized")
             
         except Exception as e:
             print(f"[ERROR] Service initialization error: {e}")
@@ -745,12 +777,13 @@ class ServiceAdapter:
         
     async def get_project_info(self, n_code: str) -> Optional[Dict[str, Any]]:
         """N-codeからプロジェクト情報を取得（メインシートから）"""
-        if not self.google_sheets:
-            print(f"[ERROR] Google Sheets service is not available")
+        if not self.sheets_service:
+            print(f"[ERROR] SheetsService is not available")
             return None
             
         try:
-            project_info = self.google_sheets.search_n_code(n_code)
+            # 新しいSheetsServiceに委譲
+            project_info = await self.sheets_service.get_project_info(n_code)
             if not project_info:
                 print(f"[ERROR] Nコード {n_code} のプロジェクト情報が見つかりません")
                 return None
@@ -761,12 +794,13 @@ class ServiceAdapter:
     
     async def get_task_info(self, n_code: str) -> Optional[List[Dict[str, Any]]]:
         """N-codeからタスク情報を取得（タスク管理シートから）"""
-        if not self.google_sheets:
-            print(f"[ERROR] Google Sheets service is not available")
+        if not self.sheets_service:
+            print(f"[ERROR] SheetsService is not available")
             return None
             
         try:
-            task_info = self.google_sheets.get_task_info(n_code)
+            # 新しいSheetsServiceに委譲
+            task_info = await self.sheets_service.get_task_info(n_code)
             return task_info
         except Exception as e:
             print(f"[ERROR] タスク情報取得エラー: {e}")
@@ -774,13 +808,13 @@ class ServiceAdapter:
     
     async def create_task_record(self, n_code: str, status: str, slack_channel: str = "", github_repo: str = "", content: str = "") -> bool:
         """タスク管理シートに新しいタスクレコードを作成"""
-        if not self.google_sheets:
-            print(f"[ERROR] Google Sheets service is not available")
+        if not self.sheets_service:
+            print(f"[ERROR] SheetsService is not available")
             return False
             
         try:
-            result = await self._run_in_executor(
-                self.google_sheets.create_task_record, 
+            # 新しいSheetsServiceに委譲
+            result = await self.sheets_service.create_task_record(
                 n_code, status, slack_channel, github_repo, content
             )
             return result
@@ -790,14 +824,13 @@ class ServiceAdapter:
     
     async def sync_project_tasks(self, n_code: str) -> bool:
         """プロジェクトとタスクの同期（2つのシート間の情報やりとり）"""
-        if not self.google_sheets:
-            print(f"[ERROR] Google Sheets service is not available")
+        if not self.sheets_service:
+            print(f"[ERROR] SheetsService is not available")
             return False
             
         try:
-            result = await self._run_in_executor(
-                self.google_sheets.sync_project_tasks, n_code
-            )
+            # 新しいSheetsServiceに委譲
+            result = await self.sheets_service.sync_project_tasks(n_code)
             return result
         except Exception as e:
             print(f"[ERROR] プロジェクトタスク同期エラー: {e}")
@@ -805,19 +838,18 @@ class ServiceAdapter:
     
     async def sync_purchase_list_urls(self, purchase_sheet_id: str, purchase_sheet_name: str = "技術書典18") -> Dict[str, Any]:
         """技術書典購入リストからメインシートE列へのURL同期（非同期ラッパー）"""
-        if not self.google_sheets:
-            print(f"[ERROR] Google Sheets service is not available")
+        if not self.sheets_service:
+            print(f"[ERROR] SheetsService is not available")
             return {
                 "success": False,
-                "error": "Google Sheets service not available",
+                "error": "SheetsService not available",
                 "mappings_found": 0,
                 "updates_performed": 0
             }
             
         try:
-            # 実際の同期処理を非同期で実行
-            result = await self._run_in_executor(
-                self.google_sheets.sync_purchase_list_urls, 
+            # 新しいSheetsServiceに委譲
+            result = await self.sheets_service.sync_purchase_list_urls(
                 purchase_sheet_id, purchase_sheet_name
             )
             
@@ -849,13 +881,12 @@ class ServiceAdapter:
             
     async def create_slack_channel(self, channel_name: str) -> Optional[str]:
         """Slackチャンネルを作成"""
-        if not self.slack_service:
+        if not self.slack_service_new:
             return None
             
         try:
-            channel_id = await self._run_in_executor(
-                self.slack_service.create_channel, channel_name
-            )
+            # 新しいSlackServiceに委譲
+            channel_id = await self.slack_service_new.create_slack_channel(channel_name)
             return channel_id
         except Exception as e:
             print(f"[ERROR] Slackチャンネル作成エラー: {e}")
@@ -863,13 +894,12 @@ class ServiceAdapter:
             
     async def invite_to_slack_channel(self, channel_id: str, user_email: str) -> bool:
         """Slackチャンネルにユーザーを招待"""
-        if not self.slack_service:
+        if not self.slack_service_new:
             return False
             
         try:
-            success = await self._run_in_executor(
-                self.slack_service.invite_user, channel_id, user_email
-            )
+            # 新しいSlackServiceに委譲
+            success = await self.slack_service_new.invite_to_slack_channel(channel_id, user_email)
             return success
         except Exception as e:
             print(f"[ERROR] Slack招待エラー: {e}")
@@ -877,16 +907,13 @@ class ServiceAdapter:
             
     async def create_github_repo(self, repo_name: str, description: str = "") -> Optional[str]:
         """GitHubリポジトリを作成"""
-        if not self.github_client:
-            print("⚠️ GitHub client not available")
+        if not self.github_service:
+            print("⚠️ GitHubService not available")
             return None
             
         try:
-            # GitHubサービス経由でリポジトリを作成
-            repo_url = await self._run_in_executor(
-                self.github_client.create_repository,
-                repo_name, description, False, True  # private=False, auto_init=True
-            )
+            # 新しいGitHubServiceに委譲
+            repo_url = await self.github_service.create_github_repo(repo_name, description)
             return repo_url
         except Exception as e:
             print(f"[ERROR] GitHubリポジトリ作成エラー: {e}")
@@ -894,24 +921,26 @@ class ServiceAdapter:
         
     async def find_user_by_email(self, email: str) -> Optional[str]:
         """メールアドレスからSlackユーザーIDを検索"""
-        if not self.slack_service or not hasattr(self.slack_service, 'client') or not self.slack_service.client:
-            print(f"[ERROR] Real Slack service/client not available for user lookup")
+        if not self.slack_service_new:
+            print(f"[ERROR] SlackService not available for user lookup")
             return None
             
         try:
-            return await self.slack_service.client.find_user_by_email(email)
+            # 新しいSlackServiceに委譲
+            return await self.slack_service_new.find_user_by_email(email)
         except Exception as e:
             print(f"[ERROR] ユーザー検索エラー: {e}")
             return None
     
     async def find_workflow_channel(self) -> Optional[str]:
         """ワークフロー管理チャンネルを検索"""
-        if not self.slack_service or not hasattr(self.slack_service, 'client') or not self.slack_service.client:
-            print(f"[ERROR] Real Slack service/client not available for workflow channel search")
+        if not self.slack_service_new:
+            print(f"[ERROR] SlackService not available for workflow channel search")
             return None
             
         try:
-            return await self.slack_service.client.find_workflow_channel()
+            # 新しいSlackServiceに委譲
+            return await self.slack_service_new.find_workflow_channel()
         except Exception as e:
             print(f"[ERROR] ワークフローチャンネル検索エラー: {e}")
             return None
@@ -919,12 +948,13 @@ class ServiceAdapter:
     async def post_workflow_guidance(self, channel_id: str, project_info: dict, manual_tasks: list, 
                                    execution_summary: dict, sheet_id: str) -> bool:
         """ワークフローガイダンスの投稿"""
-        if not self.slack_service or not hasattr(self.slack_service, 'client') or not self.slack_service.client:
-            print(f"[ERROR] Real Slack service/client not available for workflow guidance posting")
+        if not self.slack_service_new:
+            print(f"[ERROR] SlackService not available for workflow guidance posting")
             return False
             
         try:
-            return await self.slack_service.client.post_workflow_guidance(
+            # 新しいSlackServiceに委譲
+            return await self.slack_service_new.post_workflow_guidance(
                 channel_id, project_info, manual_tasks, execution_summary, sheet_id
             )
         except Exception as e:
@@ -933,43 +963,46 @@ class ServiceAdapter:
     
     async def invite_github_app_with_bot_token(self, channel_id: str, github_app_id: str) -> bool:
         """ボットトークンでGitHub Appをチャンネルに招待"""
-        if not self.slack_service or not hasattr(self.slack_service, 'client') or not self.slack_service.client:
-            print(f"[ERROR] Real Slack service/client not available for GitHub App invitation")
+        if not self.slack_service_new:
+            print(f"[ERROR] SlackService not available for GitHub App invitation")
             return False
             
         try:
-            return await self.slack_service.client.invite_github_app_with_bot_token(channel_id, github_app_id)
+            # 新しいSlackServiceに委譲
+            return await self.slack_service_new.invite_github_app_with_bot_token(channel_id, github_app_id)
         except Exception as e:
             print(f"[ERROR] GitHub App招待エラー (bot token): {e}")
             return False
     
     async def invite_github_app_with_alternative_bot(self, channel_id: str, github_app_id: str) -> bool:
         """代替ボットトークンでGitHub Appをチャンネルに招待"""
-        if not self.slack_service or not hasattr(self.slack_service, 'client') or not self.slack_service.client:
-            print(f"[ERROR] Real Slack service/client not available for alternative GitHub App invitation")
+        if not self.slack_service_new:
+            print(f"[ERROR] SlackService not available for alternative GitHub App invitation")
             return False
             
         try:
-            return await self.slack_service.client.invite_github_app_with_alternative_bot(channel_id, github_app_id)
+            # 新しいSlackServiceに委譲
+            return await self.slack_service_new.invite_github_app_with_alternative_bot(channel_id, github_app_id)
         except Exception as e:
             print(f"[ERROR] GitHub App招待エラー (alternative bot): {e}")
             return False
     
     async def invite_user_by_email(self, channel_id: str, email: str, use_user_token: bool = True) -> bool:
         """メールアドレスでユーザーをチャンネルに招待"""
-        if not self.slack_service or not hasattr(self.slack_service, 'client') or not self.slack_service.client:
-            print(f"[ERROR] Real Slack service/client not available for user invitation by email")
+        if not self.slack_service_new:
+            print(f"[ERROR] SlackService not available for user invitation by email")
             return False
             
         try:
-            return await self.slack_service.client.invite_user_by_email(channel_id, email, use_user_token)
+            # 新しいSlackServiceに委譲
+            return await self.slack_service_new.invite_user_by_email(channel_id, email, use_user_token)
         except Exception as e:
             print(f"[ERROR] メール招待エラー: {e}")
             return False
             
     async def _run_in_executor(self, func, *args, **kwargs):
         """同期関数を非同期で実行"""
-        loop = asyncio.get_event_loop()
+        loop = asyncio.get_running_loop()
         return await loop.run_in_executor(None, func, *args, **kwargs)
         
 
