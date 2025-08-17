@@ -447,30 +447,60 @@ class ServiceAdapterFactory:
     """サービスアダプターファクトリー - 抽象化レイヤー"""
     
     @staticmethod
-    def create_adapters() -> tuple[IGoogleSheetsAdapter, ISlackAdapter, IGitHubAdapter]:
-        """各種サービスアダプターを一括作成
+    def create_services() -> tuple:
+        """Service\u76f4\u63a5\u59d4\u8b72\u7528\u30b5\u30fc\u30d3\u30b9\u4f5c\u6210 - Phase 4D\u6700\u9069\u5316
         
         Returns:
-            tuple: (GoogleSheetsAdapter, SlackAdapter, GitHubAdapter)
+            tuple: (SheetsService, SlackService, GitHubService)
         """
-        # 既存サービスの初期化（既存ロジック保持）
         try:
-            # Google Sheets Service - 既存の変数を直接使用
-            sheets_service = GoogleSheetsService if 'GoogleSheetsService' in globals() else None
+            # Google Sheets Service - \u65e2\u5b58\u30ed\u30b8\u30c3\u30af\u4f7f\u7528
+            sheets_service = GoogleSheetsService() if 'GoogleSheetsService' in globals() else None
             
-            # Slack Service - 既存ロジック使用
+            # Slack Service - \u65e2\u5b58\u30ed\u30b8\u30c3\u30af\u4f7f\u7528
             if REAL_SLACK_AVAILABLE:
                 slack_service = RealSlackService()
             else:
                 slack_service = MockSlackService()
             
-            # GitHub Service - 既存ロジック使用
+            # GitHub Service - \u65e2\u5b58\u30ed\u30b8\u30c3\u30af\u4f7f\u7528
             if REAL_GITHUB_AVAILABLE:
                 github_service = RealGitHubService()
             else:
                 github_service = MockGitHubService()
             
-            # アダプター作成
+            return sheets_service, slack_service, github_service
+            
+        except Exception as e:
+            logger.error(f"Failed to create services: {e}")
+            # \u30d5\u30a9\u30fc\u30eb\u30d0\u30c3\u30af: Mock\u30b5\u30fc\u30d3\u30b9\u3067\u7d99\u7d9a
+            return None, MockSlackService(), MockGitHubService()
+    
+    @staticmethod
+    def create_adapters() -> tuple[IGoogleSheetsAdapter, ISlackAdapter, IGitHubAdapter]:
+        """\u30ec\u30ac\u30b7\u30fc\u30a2\u30c0\u30d7\u30bf\u30fc\u4f5c\u6210\u30e1\u30bd\u30c3\u30c9(\u5f8c\u65b9\u4e92\u63db\u6027)
+        
+        Returns:
+            tuple: (GoogleSheetsAdapter, SlackAdapter, GitHubAdapter)
+        """
+        # \u65e2\u5b58\u30b5\u30fc\u30d3\u30b9\u306e\u521d\u671f\u5316\uff08\u65e2\u5b58\u30ed\u30b8\u30c3\u30af\u4fdd\u6301\uff09
+        try:
+            # Google Sheets Service - \u65e2\u5b58\u306e\u5909\u6570\u3092\u76f4\u63a5\u4f7f\u7528
+            sheets_service = GoogleSheetsService if 'GoogleSheetsService' in globals() else None
+            
+            # Slack Service - \u65e2\u5b58\u30ed\u30b8\u30c3\u30af\u4f7f\u7528
+            if REAL_SLACK_AVAILABLE:
+                slack_service = RealSlackService()
+            else:
+                slack_service = MockSlackService()
+            
+            # GitHub Service - \u65e2\u5b58\u30ed\u30b8\u30c3\u30af\u4f7f\u7528
+            if REAL_GITHUB_AVAILABLE:
+                github_service = RealGitHubService()
+            else:
+                github_service = MockGitHubService()
+            
+            # \u30a2\u30c0\u30d7\u30bf\u30fc\u4f5c\u6210
             sheets_adapter = GoogleSheetsAdapter(sheets_service)
             slack_adapter = SlackAdapter(slack_service)
             github_adapter = GitHubAdapter(github_service)
@@ -479,7 +509,7 @@ class ServiceAdapterFactory:
             
         except Exception as e:
             logger.error(f"Failed to create service adapters: {e}")
-            # フォールバック: Mockサービスで継続
+            # \u30d5\u30a9\u30fc\u30eb\u30d0\u30c3\u30af: Mock\u30b5\u30fc\u30d3\u30b9\u3067\u7d99\u7d9a
             return (
                 GoogleSheetsAdapter(None),
                 SlackAdapter(MockSlackService()),
@@ -1016,18 +1046,16 @@ class ServiceAdapter:
     """
     
     def __init__(self):
-        """ServiceAdapterの初期化 - Phase 4A: 委譲パターン実装"""
-        logger.info("ServiceAdapter initializing with delegation pattern...")
+        """ServiceAdapter\u306e\u521d\u671f\u5316 - Phase 4D: Service\u76f4\u63a5\u59d4\u8b72\u6700\u9069\u5316"""
+        logger.info("ServiceAdapter initializing with direct service delegation...")
         
-        # Phase 4A: アダプターファクトリーによる生成
-        self.sheets_adapter, self.slack_adapter, self.github_adapter = ServiceAdapterFactory.create_adapters()
+        # Phase 4D: Service\u76f4\u63a5\u59d4\u8b72\u30d1\u30bf\u30fc\u30f3\u6700\u9069\u5316
+        self.sheets_service, self.slack_service, self.github_service = ServiceAdapterFactory.create_services()
         
-        # 既存インターフェース保持のため、レガシー属性も設定
-        self.github_service = self.github_adapter.github_service if hasattr(self.github_adapter, 'github_service') else None
-        self.slack_service_new = self.slack_adapter.slack_service if hasattr(self.slack_adapter, 'slack_service') else None  
-        self.sheets_service = self.sheets_adapter.sheets_service if hasattr(self.sheets_adapter, 'sheets_service') else None
+        # \u65e2\u5b58\u30a4\u30f3\u30bf\u30fc\u30d5\u30a7\u30fc\u30b9\u4fdd\u6301\uff08\u5f8c\u65b9\u4e92\u63db\u6027\uff09
+        self.slack_service_new = self.slack_service
         
-        # 従来の初期化メソッド呼び出し（既存ワークフロー保持）
+        # \u5f93\u6765\u306e\u521d\u671f\u5316\u30e1\u30bd\u30c3\u30c9\u547c\u3073\u51fa\u3057\uff08\u65e2\u5b58\u30ef\u30fc\u30af\u30d5\u30ed\u30fc\u4fdd\u6301\uff09
         self._initialize_services()
     
     def _initialize_services(self):
@@ -1074,215 +1102,187 @@ class ServiceAdapter:
         return service_instance is not None and service_instance.is_available()
         
     def get_project_info(self, project_id: str):
-        """プロジェクト情報取得 - Phase 4A: GoogleSheetsアダプター委譲"""
+        """プロジェクト情報取得 - Phase 4 Step 1: Service直接委譲パターン"""
+        if not self.sheets_service:
+            logger.error("SheetsService is not initialized")
+            return {"error": "SheetsService is not available"}
+        
         try:
-            return self.sheets_adapter.get_project_info(project_id)
+            # Service層に直接委譲
+            return self.sheets_service.get_project_info(project_id)
         except Exception as e:
-            logger.error(f"Failed to get project info via adapter: {e}")
-            # フォールバック: 既存ロジック
-            if self.sheets_service:
-                try:
-                    return self.sheets_service.get_project_info(project_id)
-                except Exception as fallback_e:
-                    logger.error(f"Fallback failed: {fallback_e}")
-                    return {"error": f"Both adapter and fallback failed: {e}, {fallback_e}"}
-            return {"error": f"No sheets service available: {e}"}
+            logger.error(f"Failed to get project info via SheetsService: {e}")
+            return {"error": f"SheetsService operation failed: {e}"}
     
     def get_task_info(self, task_id: str):
-        """タスク情報取得 - Phase 4A: GoogleSheetsアダプター委譲"""
+        """タスク情報取得 - Phase 4 Step 1: Service直接委譲パターン"""
+        if not self.sheets_service:
+            logger.error("SheetsService is not initialized")
+            return {"error": "SheetsService is not available"}
+        
         try:
-            return self.sheets_adapter.get_task_info(task_id)
+            # Service層に直接委譲
+            return self.sheets_service.get_task_info(task_id)
         except Exception as e:
-            logger.error(f"Failed to get task info via adapter: {e}")
-            # フォールバック: 既存ロジック
-            if self.sheets_service:
-                try:
-                    return self.sheets_service.get_task_info(task_id)
-                except Exception as fallback_e:
-                    logger.error(f"Fallback failed: {fallback_e}")
-                    return {"error": f"Both adapter and fallback failed: {e}, {fallback_e}"}
-            return {"error": f"No sheets service available: {e}"}
+            logger.error(f"Failed to get task info via SheetsService: {e}")
+            return {"error": f"SheetsService operation failed: {e}"}
     
     def create_task_record(self, task_data: dict):
-        """タスクレコード作成 - Phase 4A: GoogleSheetsアダプター委譲"""
+        """タスクレコード作成 - Phase 4 Step 1: Service直接委譲パターン"""
+        if not self.sheets_service:
+            logger.error("SheetsService is not initialized")
+            return {"error": "SheetsService is not available"}
+        
         try:
-            return self.sheets_adapter.create_task_record(task_data)
+            # Service層に直接委譲
+            return self.sheets_service.create_task_record(task_data)
         except Exception as e:
-            logger.error(f"Failed to create task record via adapter: {e}")
-            # フォールバック: 既存ロジック
-            if self.sheets_service:
-                try:
-                    return self.sheets_service.create_task_record(task_data)
-                except Exception as fallback_e:
-                    logger.error(f"Fallback failed: {fallback_e}")
-                    return {"error": f"Both adapter and fallback failed: {e}, {fallback_e}"}
-            return {"error": f"No sheets service available: {e}"}
+            logger.error(f"Failed to create task record via SheetsService: {e}")
+            return {"error": f"SheetsService operation failed: {e}"}
     
-    def sync_project_tasks(self, project_id: str):
-        """プロジェクトタスク同期 - Phase 4A: GoogleSheetsアダプター委譲"""
+    def sync_project_tasks(self, project_id: str, tasks: list):
+        """プロジェクトタスク同期 - Phase 4 Step 1: Service直接委譲パターン"""
+        if not self.sheets_service:
+            logger.error("SheetsService is not initialized")
+            return {"error": "SheetsService is not available"}
+        
         try:
-            return self.sheets_adapter.sync_project_tasks(project_id)
+            # Service層に直接委譲
+            return self.sheets_service.sync_project_tasks(project_id, tasks)
         except Exception as e:
-            logger.error(f"Failed to sync project tasks via adapter: {e}")
-            # フォールバック: 既存ロジック
-            if self.sheets_service:
-                try:
-                    return self.sheets_service.sync_project_tasks(project_id)
-                except Exception as fallback_e:
-                    logger.error(f"Fallback failed: {fallback_e}")
-                    return {"error": f"Both adapter and fallback failed: {e}, {fallback_e}"}
-            return {"error": f"No sheets service available: {e}"}
+            logger.error(f"Failed to sync project tasks via SheetsService: {e}")
+            return {"error": f"SheetsService operation failed: {e}"}
     
-    def sync_purchase_list_urls(self, project_id: str, purchase_urls: list):
-        """購入リストURL同期 - Phase 4A: GoogleSheetsアダプター委譲"""
+    def sync_purchase_list_urls(self, project_id: str, urls: list):
+        """購入リストURL同期 - Phase 4 Step 1: Service直接委譲パターン"""
+        if not self.sheets_service:
+            logger.error("SheetsService is not initialized")
+            return {"error": "SheetsService is not available"}
+        
         try:
-            return self.sheets_adapter.sync_purchase_list_urls(project_id, purchase_urls)
+            # Service層に直接委譲
+            return self.sheets_service.sync_purchase_list_urls(project_id, urls)
         except Exception as e:
-            logger.error(f"Failed to sync purchase URLs via adapter: {e}")
-            # フォールバック: 既存ロジック  
-            if self.sheets_service:
-                try:
-                    return self.sheets_service.sync_purchase_list_urls(project_id, purchase_urls)
-                except Exception as fallback_e:
-                    logger.error(f"Fallback failed: {fallback_e}")
-                    return {"error": f"Both adapter and fallback failed: {e}, {fallback_e}"}
-            return {"error": f"No sheets service available: {e}"}
+            logger.error(f"Failed to sync purchase list URLs via SheetsService: {e}")
+            return {"error": f"SheetsService operation failed: {e}"}
             
             
     def create_slack_channel(self, channel_name: str):
-        """Slackチャンネル作成 - Phase 4A: Slackアダプター委譲"""
+        """Slackチャンネル作成 - Phase 4 Step 2: Service直接委譲パターン"""
+        if not self.slack_service_new:
+            logger.error("SlackService is not initialized")
+            return {"error": "SlackService is not available"}
+        
         try:
-            return self.slack_adapter.create_slack_channel(channel_name)
+            # Service層に直接委譲
+            return self.slack_service_new.create_slack_channel(channel_name)
         except Exception as e:
-            logger.error(f"Failed to create Slack channel via adapter: {e}")
-            # フォールバック: 既存ロジック
-            if self.slack_service_new:
-                try:
-                    return self.slack_service_new.create_slack_channel(channel_name)
-                except Exception as fallback_e:
-                    logger.error(f"Fallback failed: {fallback_e}")
-                    return {"error": f"Both adapter and fallback failed: {e}, {fallback_e}"}
-            return {"error": f"No slack service available: {e}"}
+            logger.error(f"Failed to create Slack channel via SlackService: {e}")
+            return {"error": f"SlackService operation failed: {e}"}
             
     def invite_to_slack_channel(self, channel_id: str, user_id: str):
-        """Slackチャンネル招待 - Phase 4A: Slackアダプター委譲"""
+        """Slackチャンネル招待 - Phase 4 Step 2: Service直接委譲パターン"""
+        if not self.slack_service_new:
+            logger.error("SlackService is not initialized")
+            return {"error": "SlackService is not available"}
+        
         try:
-            return self.slack_adapter.invite_to_slack_channel(channel_id, user_id)
+            # Service層に直接委譲
+            return self.slack_service_new.invite_to_slack_channel(channel_id, user_id)
         except Exception as e:
-            logger.error(f"Failed to invite to Slack channel via adapter: {e}")
-            # フォールバック: 既存ロジック
-            if self.slack_service_new:
-                try:
-                    return self.slack_service_new.invite_to_slack_channel(channel_id, user_id)
-                except Exception as fallback_e:
-                    logger.error(f"Fallback failed: {fallback_e}")
-                    return {"error": f"Both adapter and fallback failed: {e}, {fallback_e}"}
-            return {"error": f"No slack service available: {e}"}
+            logger.error(f"Failed to invite to Slack channel via SlackService: {e}")
+            return {"error": f"SlackService operation failed: {e}"}
             
     def create_github_repo(self, repo_name: str, description: str = ""):
-        """GitHubリポジトリ作成 - Phase 4A: GitHubアダプター委譲"""
+        """GitHub\u30ea\u30dd\u30b8\u30c8\u30ea\u4f5c\u6210 - Phase 4C: GitHub Service\u76f4\u63a5\u59d4\u8b72"""
         try:
-            return self.github_adapter.create_github_repo(repo_name, description)
-        except Exception as e:
-            logger.error(f"Failed to create GitHub repo via adapter: {e}")
-            # フォールバック: 既存ロジック
+            # Service\u76f4\u63a5\u59d4\u8b72\u30d1\u30bf\u30fc\u30f3
             if self.github_service:
-                try:
-                    return self.github_service.create_github_repo(repo_name, description)
-                except Exception as fallback_e:
-                    logger.error(f"Fallback failed: {fallback_e}")
-                    return {"error": f"Both adapter and fallback failed: {e}, {fallback_e}"}
-            return {"error": f"No github service available: {e}"}
+                return self.github_service.create_github_repo(repo_name, description)
+            else:
+                logger.error("GitHub service not available")
+                return {"error": "GitHub service not initialized"}
+        except Exception as e:
+            logger.error(f"Failed to create GitHub repo: {e}")
+            return {"error": f"GitHub repository creation failed: {e}"}
         
     def find_user_by_email(self, email: str):
-        """メールアドレスによるユーザー検索 - Phase 4A: Slackアダプター委譲"""
+        """メールアドレスによるユーザー検索 - Phase 4 Step 2: Service直接委譲パターン"""
+        if not self.slack_service_new:
+            logger.error("SlackService is not initialized")
+            return {"error": "SlackService is not available"}
+        
         try:
-            return self.slack_adapter.find_user_by_email(email)
+            # Service層に直接委譲
+            return self.slack_service_new.find_user_by_email(email)
         except Exception as e:
-            logger.error(f"Failed to find user by email via adapter: {e}")
-            # フォールバック: 既存ロジック
-            if self.slack_service_new:
-                try:
-                    return self.slack_service_new.find_user_by_email(email)
-                except Exception as fallback_e:
-                    logger.error(f"Fallback failed: {fallback_e}")
-                    return {"error": f"Both adapter and fallback failed: {e}, {fallback_e}"}
-            return {"error": f"No slack service available: {e}"}
+            logger.error(f"Failed to find user by email via SlackService: {e}")
+            return {"error": f"SlackService operation failed: {e}"}
     
     def find_workflow_channel(self, workflow_name: str):
-        """ワークフローチャンネル検索 - Phase 4A: Slackアダプター委譲"""
+        """ワークフローチャンネル検索 - Phase 4 Step 2: Service直接委譲パターン"""
+        if not self.slack_service_new:
+            logger.error("SlackService is not initialized")
+            return {"error": "SlackService is not available"}
+        
         try:
-            return self.slack_adapter.find_workflow_channel(workflow_name)
+            # Service層に直接委譲
+            return self.slack_service_new.find_workflow_channel(workflow_name)
         except Exception as e:
-            logger.error(f"Failed to find workflow channel via adapter: {e}")
-            # フォールバック: 既存ロジック
-            if self.slack_service_new:
-                try:
-                    return self.slack_service_new.find_workflow_channel(workflow_name)
-                except Exception as fallback_e:
-                    logger.error(f"Fallback failed: {fallback_e}")
-                    return {"error": f"Both adapter and fallback failed: {e}, {fallback_e}"}
-            return {"error": f"No slack service available: {e}"}
+            logger.error(f"Failed to find workflow channel via SlackService: {e}")
+            return {"error": f"SlackService operation failed: {e}"}
     
     def post_workflow_guidance(self, channel_id: str, guidance_text: str):
-        """ワークフローガイダンス投稿 - Phase 4A: Slackアダプター委譲"""
+        """ワークフローガイダンス投稿 - Phase 4 Step 2: Service直接委譲パターン"""
+        if not self.slack_service_new:
+            logger.error("SlackService is not initialized")
+            return {"error": "SlackService is not available"}
+        
         try:
-            return self.slack_adapter.post_workflow_guidance(channel_id, guidance_text)
+            # Service層に直接委譲
+            return self.slack_service_new.post_workflow_guidance(channel_id, guidance_text)
         except Exception as e:
-            logger.error(f"Failed to post workflow guidance via adapter: {e}")
-            # フォールバック: 既存ロジック
-            if self.slack_service_new:
-                try:
-                    return self.slack_service_new.post_workflow_guidance(channel_id, guidance_text)
-                except Exception as fallback_e:
-                    logger.error(f"Fallback failed: {fallback_e}")
-                    return {"error": f"Both adapter and fallback failed: {e}, {fallback_e}"}
-            return {"error": f"No slack service available: {e}"}
+            logger.error(f"Failed to post workflow guidance via SlackService: {e}")
+            return {"error": f"SlackService operation failed: {e}"}
     
     def invite_github_app_with_bot_token(self, repo_name: str, bot_token: str):
-        """GitHub AppをBotトークンで招待 - Phase 4A: GitHubアダプター委譲"""
+        """GitHub AppをBotトークンで招待 - Phase 4 Step 2: Service直接委譲パターン"""
+        if not self.slack_service_new:
+            logger.error("SlackService is not initialized")
+            return {"error": "SlackService is not available"}
+        
         try:
-            return self.github_adapter.invite_github_app_with_bot_token(repo_name, bot_token)
+            # Service層に直接委譲
+            return self.slack_service_new.invite_github_app_with_bot_token(repo_name, bot_token)
         except Exception as e:
-            logger.error(f"Failed to invite GitHub app with bot token via adapter: {e}")
-            # フォールバック: 既存ロジック
-            if self.github_service:
-                try:
-                    return self.github_service.invite_github_app_with_bot_token(repo_name, bot_token)
-                except Exception as fallback_e:
-                    logger.error(f"Fallback failed: {fallback_e}")
-                    return {"error": f"Both adapter and fallback failed: {e}, {fallback_e}"}
-            return {"error": f"No github service available: {e}"}
+            logger.error(f"Failed to invite GitHub app with bot token via SlackService: {e}")
+            return {"error": f"SlackService operation failed: {e}"}
     
     def invite_github_app_with_alternative_bot(self, repo_name: str, alt_bot_token: str):
-        """代替BotでGitHub App招待 - Phase 4A: GitHubアダプター委譲"""
+        """代替BotでGitHub App招待 - Phase 4 Step 2: Service直接委譲パターン"""
+        if not self.slack_service_new:
+            logger.error("SlackService is not initialized")
+            return {"error": "SlackService is not available"}
+        
         try:
-            return self.github_adapter.invite_github_app_with_alternative_bot(repo_name, alt_bot_token)
+            # Service層に直接委譲
+            return self.slack_service_new.invite_github_app_with_alternative_bot(repo_name, alt_bot_token)
         except Exception as e:
-            logger.error(f"Failed to invite GitHub app with alt bot via adapter: {e}")
-            # フォールバック: 既存ロジック
-            if self.github_service:
-                try:
-                    return self.github_service.invite_github_app_with_alternative_bot(repo_name, alt_bot_token)
-                except Exception as fallback_e:
-                    logger.error(f"Fallback failed: {fallback_e}")
-                    return {"error": f"Both adapter and fallback failed: {e}, {fallback_e}"}
-            return {"error": f"No github service available: {e}"}
+            logger.error(f"Failed to invite GitHub app with alternative bot via SlackService: {e}")
+            return {"error": f"SlackService operation failed: {e}"}
     
     def invite_user_by_email(self, repo_name: str, email: str):
-        """メールアドレスによるユーザー招待 - Phase 4A: GitHubアダプター委譲"""
+        """メールアドレスによるユーザー招待 - Phase 4 Step 2: Service直接委譲パターン"""
+        if not self.slack_service_new:
+            logger.error("SlackService is not initialized")
+            return {"error": "SlackService is not available"}
+        
         try:
-            return self.github_adapter.invite_user_by_email(repo_name, email)
+            # Service層に直接委譲
+            return self.slack_service_new.invite_user_by_email(repo_name, email)
         except Exception as e:
-            logger.error(f"Failed to invite user by email via adapter: {e}")
-            # フォールバック: 既存ロジック
-            if self.github_service:
-                try:
-                    return self.github_service.invite_user_by_email(repo_name, email)
-                except Exception as fallback_e:
-                    logger.error(f"Fallback failed: {fallback_e}")
-                    return {"error": f"Both adapter and fallback failed: {e}, {fallback_e}"}
-            return {"error": f"No github service available: {e}"}
+            logger.error(f"Failed to invite user by email via SlackService: {e}")
+            return {"error": f"SlackService operation failed: {e}"}
             
     async def _run_in_executor(self, func, *args, **kwargs):
         """同期関数を非同期で実行 (ServiceUtils活用)"""
